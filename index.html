@@ -45,6 +45,7 @@
   #globalBar .stat { font-weight:800; font-size:15px; display:flex; align-items:center; gap:5px; }
   #netStat { font-size:11.5px !important; font-weight:700 !important; color:#8fdd6a; }
   #netStat.stale { color:#ff5555; }
+  #reconnectBanner { position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:20; background:#3a2a0a; border:2px solid #ffb833; color:#ffcc55; font-weight:800; font-size:13px; padding:8px 18px; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
   #speedBtn { padding:7px 14px; font-weight:800; font-size:12px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
   #speedBtn.active { background:#ffb833; border-color:#ffcc55; color:#241a05; }
   #muteBtn { padding:7px 12px; font-weight:800; font-size:13px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
@@ -138,6 +139,7 @@
     </div>
   </div>
 
+  <div id="reconnectBanner" hidden></div>
   <div id="globalBar" hidden>
     <div class="stat">🛡️ ZERO BREACHES</div>
     <div class="stat" id="timerStat">⏱ 5:00</div>

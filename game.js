@@ -255,6 +255,15 @@ const SNAPSHOT_HZ = 15;
 let inOnlineMatch = false;     // true from the moment both players connect until the room is left
 let lastSnapshotReceivedAt = 0; // remote-side watchdog: last time a snapshot actually arrived
 const SNAPSHOT_TIMEOUT_MS = 6000;
+// Generic "have I heard anything at all from my peer" watchdog, used by BOTH host and remote to
+// notice a dead connection and trigger a reconnect — unlike lastSnapshotReceivedAt (remote-only,
+// snapshot-only), this counts any inbound traffic (snapshot, action, or heartbeat).
+let lastPeerHeardAt = 0;
+let reconnecting = false;
+let reconnectAttempts = 0;
+let reconnectDeadline = 0;
+const MAX_RECONNECT_MS = 25000; // give up and show Connection Lost after this long of trying
+let lastHeartbeatSentAt = 0;
 
 function toFrac(x, y){ return [ x/(cellSize*GRID_COLS), y/(cellSize*GRID_ROWS) ]; }
 function fromFrac(fx, fy){ return [ fx*cellSize*GRID_COLS, fy*cellSize*GRID_ROWS ]; }
@@ -276,7 +285,7 @@ function connectRelay(room, role, statusEl){
     ws.onopen = ()=>{ ws.send(JSON.stringify({type:'join', room, role})); };
     ws.onerror = ()=>{ statusEl.textContent = 'Could not reach the relay server. Is it running?'; };
     ws.onclose = (ev)=>{
-      if(inOnlineMatch && netMode!=='local'){ statusEl.textContent = ''; showPeerLeft(`The connection dropped (code ${ev.code}).`); }
+      if(inOnlineMatch && netMode!=='local'){ attemptReconnect(`The connection dropped (code ${ev.code}).`); }
     };
     ws.onmessage = (ev)=>{
       let msg; try{ msg = JSON.parse(ev.data); }catch(e){ console.error('Bad message from relay:', e); return; }
@@ -289,22 +298,72 @@ function connectRelay(room, role, statusEl){
           statusEl.textContent = msg.message;
           reject(new Error(msg.message));
         } else if(msg.type==='peer_joined'){
-          inOnlineMatch = true;
           lastSnapshotReceivedAt = performance.now();
-          beginOnlineMatch();
+          lastPeerHeardAt = performance.now();
+          if(reconnecting){ endReconnect(true); }
+          else if(!inOnlineMatch){ inOnlineMatch = true; beginOnlineMatch(); }
+          // else: a redundant peer_joined while already in a live match (possible under real
+          // network timing since the relay's own join handling can interleave two near-simultaneous
+          // joins) — we're already set up correctly, so there's nothing to do.
         } else if(msg.type==='peer_left'){
-          showPeerLeft('The other player disconnected.');
+          attemptReconnect('The other player disconnected.');
         } else if(msg.type==='snapshot'){
           lastSnapshotReceivedAt = performance.now();
+          lastPeerHeardAt = performance.now();
           applySnapshot(msg.data);
         } else if(msg.type==='action'){
+          lastPeerHeardAt = performance.now();
           applyAction(msg.name, msg.payload);
+        } else if(msg.type==='hb'){
+          lastPeerHeardAt = performance.now();
         }
       }catch(e){
         console.error('Failed to process message from relay:', msg.type, e);
       }
     };
   });
+}
+
+// A dropped connection (proxy hiccup, brief WiFi loss, a flaky initial handshake) doesn't have to
+// end the match — a fresh WebSocket to the same room/role, and the relay's existing evict-on-join
+// logic reseats us seamlessly. Only fall through to the full "Connection Lost" screen once retries
+// have been exhausted, since that requires both players to redo everything from the lobby.
+const quietStatusEl = { set textContent(v){} };
+function attemptReconnect(reason){
+  if(!inOnlineMatch || connectionLost) return;
+  if(!el('gameOverOverlay').hidden) return;
+  if(reconnecting){ return; } // already retrying
+  reconnecting = true; reconnectAttempts = 0; reconnectDeadline = performance.now() + MAX_RECONNECT_MS;
+  showReconnectBanner();
+  window.__lastDisconnectReason = reason;
+  tryReconnectOnce();
+}
+function tryReconnectOnce(){
+  if(!reconnecting) return; // cancelled — peer_joined already came through
+  reconnectAttempts++;
+  updateReconnectBanner();
+  if(ws){ try{ ws.close(); }catch(e){} ws=null; }
+  connectRelay(netRoomCode, myRole, quietStatusEl).catch(()=>{});
+  setTimeout(()=>{
+    if(!reconnecting) return;
+    if(performance.now() > reconnectDeadline){ endReconnect(false); return; }
+    tryReconnectOnce();
+  }, 3000);
+}
+function endReconnect(success){
+  reconnecting = false;
+  hideReconnectBanner();
+  if(!success){ showPeerLeft(window.__lastDisconnectReason || 'Lost contact with the other player — check your connection.'); }
+}
+function showReconnectBanner(){
+  const b = el('reconnectBanner'); if(b) b.hidden = false;
+  updateReconnectBanner();
+}
+function hideReconnectBanner(){
+  const b = el('reconnectBanner'); if(b) b.hidden = true;
+}
+function updateReconnectBanner(){
+  const b = el('reconnectBanner'); if(b) b.textContent = `🔄 Reconnecting... (attempt ${reconnectAttempts})`;
 }
 
 function sendNet(obj){ if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
@@ -324,6 +383,10 @@ function showPeerLeft(reason){
   phase = 'ended';
   stopMusic();
 }
+// Safety net: reaching the lobby should never leave a reconnect retry loop running in the
+// background (it self-stops via the `reconnecting` flag check, but belt-and-suspenders here
+// costs nothing and guarantees a clean slate if that flag were ever left set by some other path).
+function cancelReconnect(){ reconnecting = false; hideReconnectBanner(); }
 
 // A backgrounded/locked tab gets its animation loop throttled hard by the browser (observed:
 // a host tab not in the foreground can stop broadcasting for 20+ seconds), which is the most
@@ -344,6 +407,7 @@ document.addEventListener('visibilitychange', ()=>{
 
 function returnToLobby(){
   el('gameOverOverlay').hidden = true;
+  cancelReconnect();
   if(ws){ try{ ws.close(); }catch(e){} ws=null; }
   netMode='local'; myRole=null; netRoomCode=null; connectionLost=false; inOnlineMatch=false;
   releaseWakeLock();
@@ -1517,20 +1581,34 @@ function loop(now){
   const rawDt = Math.min((now-lastTime)/1000, 0.05); lastTime = now;
   const dt = rawDt * gameSpeedMult;
 
-  // Watchdog: if we're the remote player and haven't heard from the host in a while
-  // (dropped wifi, backgrounded tab, etc.), say so instead of silently sitting frozen.
-  if(netMode==='remote' && inOnlineMatch && now-lastSnapshotReceivedAt > SNAPSHOT_TIMEOUT_MS){
-    showPeerLeft('Lost contact with the host — check your connection.');
+  // Watchdog: if either side hasn't heard anything at all from the other in a while (dropped
+  // wifi, backgrounded tab, a flaky relay handshake), try to reconnect instead of silently
+  // sitting frozen — a fresh WebSocket + the relay's evict-on-join logic usually reseats us
+  // cleanly. Symmetric for host and remote: a lone remote-side check would miss the host losing
+  // its own connection to the relay without a clean close.
+  if((netMode==='remote' || netMode==='host') && inOnlineMatch && !reconnecting && now-lastPeerHeardAt > SNAPSHOT_TIMEOUT_MS){
+    attemptReconnect(netMode==='remote' ? 'Lost contact with the host — check your connection.' : 'Lost contact with the other player — check your connection.');
+  }
+  // A lightweight heartbeat so the HOST also has a way to notice a dead remote — remote only
+  // sends real traffic when the player acts, which could otherwise go quiet for a while with
+  // nothing wrong. Cheap and role-agnostic; snapshots/actions already refresh lastPeerHeardAt too.
+  if(inOnlineMatch && netMode!=='local' && now-lastHeartbeatSentAt > 2000){
+    lastHeartbeatSentAt = now;
+    sendNet({type:'hb'});
   }
   // Live connection-health readout, so a stalled game shows "why" instead of just sitting there —
   // if this climbs on the host's own screen, that device itself is the one going quiet (locked,
   // backgrounded, low power mode); if only the other player's climbs, the network is the culprit.
   if(netMode==='remote' || netMode==='host'){
-    const secs = Math.max(0, (now - (netMode==='remote' ? lastSnapshotReceivedAt : lastSnapshotTime))/1000);
     const stat = el('netStat');
     if(stat){
-      stat.textContent = secs<2 ? (netMode==='remote' ? '📡 synced' : '📡 broadcasting') : `📡 stalled ${secs.toFixed(0)}s`;
-      stat.classList.toggle('stale', secs>=2);
+      if(reconnecting){
+        stat.textContent = '🔄 reconnecting'; stat.classList.add('stale');
+      } else {
+        const secs = Math.max(0, (now - (netMode==='remote' ? lastSnapshotReceivedAt : lastSnapshotTime))/1000);
+        stat.textContent = secs<2 ? (netMode==='remote' ? '📡 synced' : '📡 broadcasting') : `📡 stalled ${secs.toFixed(0)}s`;
+        stat.classList.toggle('stale', secs>=2);
+      }
     }
   }
 
