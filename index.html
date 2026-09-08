@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Siege Duel</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; width:100%; height:100%; background:#0d1016; color:#eee; font-family: system-ui, sans-serif; overflow:hidden; touch-action: none; }
+  [hidden] { display:none !important; }
+  #app { position:relative; width:100vw; height:100vh; display:flex; flex-direction:column; }
+
+  .startScreen { position:absolute; inset:0; z-index:30; background:linear-gradient(rgba(10,12,18,0.74),rgba(10,12,18,0.9)), url('assets/lobby_bg.jpg') center/cover no-repeat, radial-gradient(circle at 50% 30%, #241a20 0%, #11151c 70%); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; overflow-y:auto; }
+  .startScreen h1 { font-size:clamp(26px,6vw,44px); margin:0 0 8px; }
+  .startScreen p { color:#9aa4b8; max-width:420px; margin:4px 0; font-size:14px; }
+  .startScreen .btn { margin-top:22px; padding:14px 34px; font-size:16px; font-weight:800; border:none; border-radius:10px; background:#3fae4a; color:#fff; cursor:pointer; }
+  .modeRow { display:flex; gap:14px; margin-top:22px; flex-wrap:wrap; justify-content:center; }
+  .modeCard { width:230px; padding:18px 14px; border:2px solid #3a4356; border-radius:12px; background:#181d27; cursor:pointer; text-align:left; }
+  .modeCard:hover { border-color:#5a92ff; }
+  .modeCard h3 { margin:0 0 6px; font-size:15px; }
+  .modeCard p { font-size:12.5px; margin:0; color:#8b95aa; }
+  #onlinePanel { display:none; flex-direction:column; align-items:center; gap:10px; margin-top:20px; background:#181d27; border:2px solid #3a4356; border-radius:12px; padding:18px 22px; width:min(340px,86vw); }
+  #onlinePanel h3 { margin:0 0 4px; font-size:15px; }
+  .roleRow { display:flex; gap:10px; }
+  .roleBtn { flex:1; padding:9px; border-radius:8px; border:2px solid #3a4356; background:#232a38; color:#eee; font-weight:700; font-size:12.5px; cursor:pointer; }
+  .roleBtn.selected { border-color:#ffcc33; background:#2c2515; }
+  #roomCodeInput { width:100%; padding:10px; font-size:16px; text-align:center; letter-spacing:3px; text-transform:uppercase; border-radius:8px; border:2px solid #3a4356; background:#11151c; color:#eee; }
+  .onlineBtnRow { display:flex; gap:10px; width:100%; }
+  .onlineBtnRow button { flex:1; padding:10px; border:none; border-radius:8px; font-weight:800; font-size:12.5px; cursor:pointer; }
+  #createRoomBtn { background:#3fae4a; color:#fff; }
+  #joinRoomBtn { background:#3a7bd5; color:#fff; }
+  #onlineStatus { font-size:12.5px; color:#ffd23f; min-height:18px; }
+  #backToModeBtn { background:none; border:none; color:#8b95aa; text-decoration:underline; cursor:pointer; font-size:12px; margin-top:4px; }
+
+  .themeSection { margin-top:22px; }
+  .themeSection .label { font-size:11.5px; color:#8b95aa; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .themeRow { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .themeSwatch { display:flex; flex-direction:column; align-items:center; gap:4px; width:76px; padding:10px 6px; border-radius:10px; border:2px solid #3a4356; background:#181d27; cursor:pointer; }
+  .themeSwatch .emoji { font-size:20px; }
+  .themeSwatch .label2 { font-size:10.5px; font-weight:700; color:#cdd6e8; }
+  .themeSwatch:hover { border-color:#5a92ff; }
+  .themeSwatch.selected { border-color:#ffcc33; background:#2c2515; }
+
+  #globalBar { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:20px; padding:6px 16px; background:#0d1016; border-bottom:2px solid #2a3140; z-index:5; }
+  #globalBar .stat { font-weight:800; font-size:15px; display:flex; align-items:center; gap:5px; }
+  #speedBtn { padding:7px 14px; font-weight:800; font-size:12px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
+  #speedBtn.active { background:#ffb833; border-color:#ffcc55; color:#241a05; }
+  #muteBtn { padding:7px 12px; font-weight:800; font-size:13px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
+  #muteBtn.muted { opacity:0.5; }
+
+  .half { flex:1 1 50%; min-height:0; display:flex; flex-direction:column; position:relative; }
+  #defenseHalf { border-bottom:3px solid #ff8080; }
+  #offenseHalf { border-top:3px solid #ff8080; }
+  .halfHead { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:5px 10px; background:#181d27; font-size:12px; font-weight:800; letter-spacing:0.5px; }
+  .halfHead.def { color:#7fc7ff; } .halfHead.off { color:#ff8080; }
+  .halfHead .coin { color:#ffd23f; margin-left:auto; }
+
+  .shopGrid { flex:0 0 auto; background:#181d27; display:grid; gap:4px; padding:4px 8px; }
+  #towerShop { height: clamp(70px, 10vh, 92px); grid-template-columns: repeat(11, 1fr); grid-template-rows: 1fr; }
+  #monsterShop { height: clamp(112px, 18vh, 148px); grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(2, 1fr); }
+  .shop-card { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; padding:2px; border-radius:8px; border:2px solid #2f3848; background:#232a38; color:#eee; text-align:center; cursor:pointer; overflow:hidden; }
+  .shop-card:hover { border-color:#5a92ff; }
+  .shop-card img.icon { width:26px; height:26px; object-fit:contain; margin-bottom:2px; flex-shrink:0; }
+  .shop-card .name { font-weight:700; font-size:10.5px; line-height:1.05; }
+  .shop-card .cost { color:#ffd23f; font-size:9.5px; }
+  .shop-card.selected { border-color:#ffcc33; background:#2c2515; }
+  .shop-card:disabled, .shop-card.disabled { opacity:0.4; cursor:not-allowed; }
+  .shop-card.abilityItem { background:#3a2030; border-color:#5a2a40; }
+  .shop-card.abilityItem.selected { border-color:#ff5577; background:#4a1520; }
+  .lvlBadge { position:absolute; top:1px; right:1px; font-size:7.5px; font-weight:800; padding:1px 3px; border-radius:5px; background:rgba(10,12,18,0.8); border:1px solid #4a5468; color:#9fc6ff; cursor:pointer; z-index:2; line-height:1.3; }
+  .lvlBadge:hover { border-color:#5a92ff; }
+  .lvlBadge.maxed { color:#ffd23f; border-color:#8a6d1f; cursor:default; }
+  .lvlBadge.disabled { opacity:0.45; cursor:not-allowed; }
+
+  .canvasWrap { flex:1 1 auto; min-height:0; display:flex; background:#11151c; position:relative; overflow:hidden; }
+  canvas.gameCanvas { display:block; width:100%; height:100%; background:#1c2230; }
+
+  #infoPanel { position:absolute; bottom:8px; left:8px; background:rgba(20,24,32,0.96); border:2px solid #3a4356; border-radius:10px; padding:10px; min-width:190px; display:none; z-index:6; font-size:12.5px; }
+  #infoPanel h4 { margin:0 0 5px; font-size:14px; }
+  #infoPanel .row { display:flex; justify-content:space-between; margin:2px 0; color:#c0c8d8; }
+  #infoPanel button { margin-top:7px; margin-right:5px; padding:6px 11px; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:11.5px; }
+  #upgradeBtn, #commanderUpgradeBtn { background:#3fae4a; color:#fff; }
+  #upgradeBtn:disabled, #commanderUpgradeBtn:disabled { background:#3a4150; color:#888; }
+  #sellBtn { background:#c0392b; color:#fff; }
+  #commanderPanel { position:absolute; bottom:8px; left:8px; background:rgba(20,24,32,0.96); border:2px solid #3a4356; border-radius:10px; padding:10px; min-width:190px; display:none; z-index:6; font-size:12.5px; }
+  #commanderPanel h4 { margin:0 0 5px; font-size:14px; color:#5599ff; }
+  #commanderPanel .row { display:flex; justify-content:space-between; margin:2px 0; color:#c0c8d8; }
+  #commanderPanel button { margin-top:7px; padding:6px 11px; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:11.5px; }
+
+  #tooltip { position:fixed; max-width:260px; background:rgba(15,18,26,0.98); border:2px solid #3fae7a; border-radius:8px; padding:9px 12px; font-size:12px; line-height:1.4; color:#e8ecf2; z-index:50; pointer-events:none; display:none; box-shadow:0 4px 14px rgba(0,0,0,0.5); }
+  #tooltip b { color:#ffd23f; display:block; margin-bottom:3px; font-size:12.5px; }
+
+  .overlay { position:absolute; inset:0; background:rgba(8,10,16,0.92); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:25; text-align:center; }
+  .overlay h1 { font-size:36px; margin:0 0 8px; }
+  .overlay p { color:#aab; margin:0 0 16px; }
+  .overlay .btn { padding:11px 26px; font-size:14px; font-weight:800; border:none; border-radius:8px; background:#3fae4a; color:#fff; cursor:pointer; }
+  #leaveRoomBtn { display:none; margin-top:12px; background:none; border:none; color:#8b95aa; text-decoration:underline; cursor:pointer; font-size:12px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="startScreen" id="startScreen">
+    <h1>SIEGE DUEL</h1>
+    <p><b style="color:#7fc7ff">Defense</b> must stop <b>every single monster</b> — one breach and it's over. <b style="color:#ff8080">Offense</b> just needs to get one character through, sending monsters and directly controlling a Commander to attack towers.</p>
+
+    <div class="modeRow" id="modeRow">
+      <div class="modeCard" id="localModeCard">
+        <h3>🖥️ Play Together</h3>
+        <p>Both players on this one device, split screen — great for testing.</p>
+      </div>
+      <div class="modeCard" id="onlineModeCard">
+        <h3>🌐 Play Online</h3>
+        <p>Two separate computers on the same WiFi — one Defense, one Offense.</p>
+      </div>
+    </div>
+
+    <div class="themeSection">
+      <div class="label">Battlefield</div>
+      <div class="themeRow" id="themeRow"></div>
+    </div>
+
+    <div id="onlinePanel">
+      <h3>Play Online</h3>
+      <div class="roleRow">
+        <button class="roleBtn selected" id="pickDefenseBtn" data-role="defense">🛡️ Defense</button>
+        <button class="roleBtn" id="pickOffenseBtn" data-role="offense">💀 Offense</button>
+      </div>
+      <input id="roomCodeInput" maxlength="5" placeholder="ROOM CODE">
+      <div class="onlineBtnRow">
+        <button id="createRoomBtn">CREATE ROOM</button>
+        <button id="joinRoomBtn">JOIN ROOM</button>
+      </div>
+      <div id="onlineStatus"></div>
+      <button id="backToModeBtn">&larr; back</button>
+    </div>
+  </div>
+
+  <div id="globalBar" hidden>
+    <div class="stat">🛡️ ZERO BREACHES</div>
+    <div class="stat" id="timerStat">⏱ 5:00</div>
+    <button id="speedBtn">1x SPEED</button>
+    <button id="muteBtn">🔊</button>
+  </div>
+
+  <div class="half" id="defenseHalf" hidden>
+    <div class="halfHead def">🛡️ DEFENSE <span class="coin">💰 <span id="defCoins">150</span></span></div>
+    <div class="shopGrid" id="towerShop"></div>
+    <div class="canvasWrap">
+      <canvas class="gameCanvas" id="defenseCanvas"></canvas>
+      <div id="infoPanel">
+        <h4 id="infoName">Tower</h4>
+        <div class="row"><span>Level</span><span id="infoLevel">1</span></div>
+        <div class="row"><span>HP</span><span id="infoHp">-</span></div>
+        <div class="row"><span>Damage</span><span id="infoDamage">-</span></div>
+        <button id="upgradeBtn">UPGRADE (💰<span id="upgradeCost">0</span>)</button>
+        <button id="sellBtn">SELL (💰<span id="sellValue">0</span>)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="half" id="offenseHalf" hidden>
+    <div class="halfHead off">💀 OFFENSE <span class="coin">💰 <span id="offCoins">40</span></span></div>
+    <div class="shopGrid" id="monsterShop"></div>
+    <div class="canvasWrap">
+      <canvas class="gameCanvas" id="offenseCanvas"></canvas>
+      <div id="commanderPanel">
+        <h4>⭐ Commander</h4>
+        <div class="row"><span>Level</span><span id="cmdLevel">1</span></div>
+        <div class="row"><span>HP</span><span id="cmdHp">-</span></div>
+        <div class="row"><span>XP</span><span id="cmdXp">-</span></div>
+        <button id="commanderUpgradeBtn">UPGRADE (💰<span id="cmdUpCost">0</span>)</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <div class="overlay" id="gameOverOverlay" hidden>
+    <h1 id="resultTitle">VICTORY</h1>
+    <p id="resultSub"></p>
+    <button class="btn" id="rematchBtn">REMATCH</button>
+    <button id="leaveRoomBtn">&larr; leave to menu</button>
+  </div>
+
+</div>
+<script src="game.js"></script>
+</body>
+</html>
