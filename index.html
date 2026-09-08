@@ -43,6 +43,8 @@
 
   #globalBar { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:20px; padding:6px 16px; background:#0d1016; border-bottom:2px solid #2a3140; z-index:5; }
   #globalBar .stat { font-weight:800; font-size:15px; display:flex; align-items:center; gap:5px; }
+  #netStat { font-size:11.5px !important; font-weight:700 !important; color:#8fdd6a; }
+  #netStat.stale { color:#ff5555; }
   #speedBtn { padding:7px 14px; font-weight:800; font-size:12px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
   #speedBtn.active { background:#ffb833; border-color:#ffcc55; color:#241a05; }
   #muteBtn { padding:7px 12px; font-weight:800; font-size:13px; border:2px solid #4a5468; border-radius:6px; background:#232a38; color:#cdd6e8; cursor:pointer; }
@@ -139,6 +141,7 @@
   <div id="globalBar" hidden>
     <div class="stat">🛡️ ZERO BREACHES</div>
     <div class="stat" id="timerStat">⏱ 5:00</div>
+    <div class="stat" id="netStat" hidden></div>
     <button id="speedBtn">1x SPEED</button>
     <button id="muteBtn">🔊</button>
   </div>

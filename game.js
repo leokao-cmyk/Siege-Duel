@@ -361,6 +361,7 @@ function beginOnlineMatch(){
   el('defenseHalf').hidden = (myRole!=='defense');
   el('offenseHalf').hidden = (myRole!=='offense');
   document.getElementById('speedBtn').style.display = (netMode==='remote') ? 'none' : '';
+  el('netStat').hidden = false;
   actx.resume && actx.resume();
   requestWakeLock();
   buildShops(); resize(); refreshShopStates();
@@ -1520,6 +1521,17 @@ function loop(now){
   // (dropped wifi, backgrounded tab, etc.), say so instead of silently sitting frozen.
   if(netMode==='remote' && inOnlineMatch && now-lastSnapshotReceivedAt > SNAPSHOT_TIMEOUT_MS){
     showPeerLeft('Lost contact with the host — check your connection.');
+  }
+  // Live connection-health readout, so a stalled game shows "why" instead of just sitting there —
+  // if this climbs on the host's own screen, that device itself is the one going quiet (locked,
+  // backgrounded, low power mode); if only the other player's climbs, the network is the culprit.
+  if(netMode==='remote' || netMode==='host'){
+    const secs = Math.max(0, (now - (netMode==='remote' ? lastSnapshotReceivedAt : lastSnapshotTime))/1000);
+    const stat = el('netStat');
+    if(stat){
+      stat.textContent = secs<2 ? (netMode==='remote' ? '📡 synced' : '📡 broadcasting') : `📡 stalled ${secs.toFixed(0)}s`;
+      stat.classList.toggle('stale', secs>=2);
+    }
   }
 
   const simulate = phase==='playing' && netMode!=='remote';
