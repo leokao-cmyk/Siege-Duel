@@ -1581,13 +1581,18 @@ function loop(now){
   const rawDt = Math.min((now-lastTime)/1000, 0.05); lastTime = now;
   const dt = rawDt * gameSpeedMult;
 
-  // Watchdog: if either side hasn't heard anything at all from the other in a while (dropped
-  // wifi, backgrounded tab, a flaky relay handshake), try to reconnect instead of silently
-  // sitting frozen — a fresh WebSocket + the relay's evict-on-join logic usually reseats us
-  // cleanly. Symmetric for host and remote: a lone remote-side check would miss the host losing
-  // its own connection to the relay without a clean close.
-  if((netMode==='remote' || netMode==='host') && inOnlineMatch && !reconnecting && now-lastPeerHeardAt > SNAPSHOT_TIMEOUT_MS){
-    attemptReconnect(netMode==='remote' ? 'Lost contact with the host — check your connection.' : 'Lost contact with the other player — check your connection.');
+  // Watchdog: try to reconnect instead of silently sitting frozen — a fresh WebSocket + the
+  // relay's evict-on-join logic usually reseats us cleanly. Remote must watch specifically for
+  // real snapshot data going quiet (lastSnapshotReceivedAt), NOT the generic heartbeat below —
+  // a heartbeat can keep succeeding even when the actual 15Hz snapshot stream has stalled (e.g.
+  // a proxy struggling with that data rate/size specifically), which would otherwise mask the
+  // exact failure this is meant to catch. Host has no snapshot stream to watch, so it falls back
+  // to the heartbeat-based lastPeerHeardAt.
+  if(netMode==='remote' && inOnlineMatch && !reconnecting && now-lastSnapshotReceivedAt > SNAPSHOT_TIMEOUT_MS){
+    attemptReconnect('Lost contact with the host — check your connection.');
+  }
+  if(netMode==='host' && inOnlineMatch && !reconnecting && now-lastPeerHeardAt > SNAPSHOT_TIMEOUT_MS){
+    attemptReconnect('Lost contact with the other player — check your connection.');
   }
   // A lightweight heartbeat so the HOST also has a way to notice a dead remote — remote only
   // sends real traffic when the player acts, which could otherwise go quiet for a while with
@@ -1672,3 +1677,11 @@ function loop(now){
 }
 
 requestAnimationFrame(loop);
+
+// Mobile Safari (and some desktop browsers) can restore a page from the back/forward cache on
+// "reload" instead of truly re-fetching and re-executing it — reviving whatever stale JS state
+// (a dead `ws`, an old match, old code from before a fix) was in memory when it was last put away.
+// A version bump in the script URL doesn't help here since the page was never re-requested at
+// all. Forcing a real reload whenever a persisted/bfcache restore is detected guarantees every
+// "reload" actually runs the current deployed code from a clean slate.
+window.addEventListener('pageshow', (e)=>{ if(e.persisted) location.reload(); });
