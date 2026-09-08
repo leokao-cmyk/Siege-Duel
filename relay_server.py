@@ -8,17 +8,6 @@ ROOMS = {}  # room_code -> {'defense': ws|None, 'offense': ws|None}
 def other_role(role):
     return 'offense' if role == 'defense' else 'defense'
 
-async def is_alive(sock):
-    """A phone locking/backgrounding can kill a connection without a clean close handshake,
-    leaving a stale socket that still looks 'occupied' to the room. Before refusing a new
-    join because a role looks taken, actually ping the existing socket to check."""
-    try:
-        pong_waiter = await sock.ping()
-        await asyncio.wait_for(pong_waiter, timeout=3)
-        return True
-    except Exception:
-        return False
-
 async def handler(ws):
     room_code = None
     role = None
@@ -37,15 +26,20 @@ async def handler(ws):
                     room_code = None
                     continue
                 room = ROOMS.setdefault(room_code, {'defense': None, 'offense': None})
-                if room.get(role) is not None:
-                    if await is_alive(room[role]):
-                        await ws.send(json.dumps({'type': 'error', 'message': f'{role} is already taken in room {room_code}.'}))
-                        room_code = None
-                        role = None
-                        continue
-                    # The existing socket didn't answer a ping — treat it as dead and take its slot.
-                    room[role] = None
+                # A phone locking, backgrounding, or losing signal can kill a connection without a
+                # clean close handshake, and pinging the old socket to check isn't reliable through
+                # a proxy (it can only prove the proxy hop is alive, not the real client past it).
+                # Simplest robust fix: a fresh join for a role always takes the slot outright and
+                # evicts whoever was there — for two friends deliberately joining a shared room
+                # code, "never gets permanently stuck" matters far more than guarding against a
+                # rare accidental takeover.
+                old_sock = room.get(role)
                 room[role] = ws
+                if old_sock is not None and old_sock is not ws:
+                    try:
+                        await old_sock.close(code=4000, reason='replaced by a new connection')
+                    except Exception:
+                        pass
                 await ws.send(json.dumps({'type': 'joined', 'role': role, 'room': room_code}))
                 peer = room.get(other_role(role))
                 if peer is not None:
