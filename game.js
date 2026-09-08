@@ -257,7 +257,7 @@ function fromFrac(fx, fy){ return [ fx*cellSize*GRID_COLS, fy*cellSize*GRID_ROWS
 // Once the relay is deployed to Render (or similar), put its wss:// URL here. Local LAN play
 // (localhost / a 192.168.x.x or 10.x.x.x address) still uses the old same-machine relay on :8940
 // automatically, so nothing changes for hotseat/LAN testing.
-const DEPLOYED_RELAY_URL = ''; // e.g. 'wss://siege-duel-relay.onrender.com'
+const DEPLOYED_RELAY_URL = 'wss://siege-duel.onrender.com';
 function wsUrl(){
   const h = location.hostname;
   const isLocalNetwork = h==='localhost' || h==='127.0.0.1' || h.startsWith('192.168.') || h.startsWith('10.') || /^172\.(1[6-9]|2\d|3[01])\./.test(h);
