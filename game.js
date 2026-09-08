@@ -82,7 +82,7 @@ const ENEMY_TYPES = {
     desc:'Splits into two Splitlings when destroyed, doubling the trouble.' },
   splitling:{ name:'Splitling', hp:22, speed:2.2, livesLost:3, cost:0, endBonus:15, towerDps:8, color:'#e2aaff', dark:'#5a2680',
     desc:'A fragile fragment left behind by a destroyed Splitter.' },
-  broodcarrier: { name:'Brood Carrier', hp:95, speed:1.15, livesLost:10, cost:42, endBonus:20, towerDps:12, color:'#8a7a3a', dark:'#3a3018', splitInto:'grunt', splitCount:4,
+  broodcarrier: { name:'Brood Carrier', hp:95, speed:1.15, livesLost:10, cost:78, endBonus:20, towerDps:12, color:'#8a7a3a', dark:'#3a3018', splitInto:'grunt', splitCount:4,
     desc:'A tough carrier that bursts into 4 Grunts when destroyed — kill it fast before it multiplies.' },
   ravager:  { name:'Ravager', hp:410, speed:1.15, livesLost:22, cost:145, endBonus:45, towerDps:55, color:'#7a3fb0', dark:'#2a1040',
     desc:'Faster and hits harder than Juggernaut, with no slam — a mobile heavy threat that closes in fast.' },
