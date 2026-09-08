@@ -112,7 +112,7 @@ const DEFENSE_ABILITIES = {
   nuke: { key:'nuke', name:'Nuclear Bomb', desc:'Free, one-time use per match. Instantly kills every monster and the enemy Commander on the field, and blasts every one of your towers for 50% of its max HP (towers already below half health are destroyed outright).', cost:0 },
 };
 
-const COMMANDER_BASE = { hp:190, damage:25, fireRate:1.15, range:2.0, speed:2.0, respawnTime:12, xpPerLevel:170, maxLevel:4 };
+const COMMANDER_BASE = { hp:220, damage:29, fireRate:1.15, range:2.0, speed:2.0, respawnTime:12, xpPerLevel:170, maxLevel:4 };
 // Kept off every map's path and away from the corner — a cramped bottom-left corner spawn was
 // hard to reach/tap on small/tablet screens (verified clear of all 4 battlefield paths).
 const COMMANDER_HOME_CELL = [2, 5];
