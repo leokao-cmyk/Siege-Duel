@@ -11,7 +11,7 @@ const MAP_WAYPOINTS = {
 let WAYPOINTS = MAP_WAYPOINTS.warzone;
 const MATCH_SECONDS = 360;
 const DEFENSE_START_COINS = 200;
-const OFFENSE_START_COINS = 70;
+const OFFENSE_START_COINS = 100;
 const OFFENSE_TRICKLE_PER_SEC = 3.0;
 const DEFENSE_TRICKLE_PER_SEC = 5.9;
 const MAX_LIVES = 100;
@@ -68,7 +68,7 @@ const ENEMY_TYPES = {
   tank:     { name:'Tank', hp:185, speed:1.05, livesLost:12, cost:34, endBonus:30, towerDps:33, color:'#a9713f', dark:'#5a3c1f',
     slamDamage:28, slamInterval:3, slamRadius:1.5,
     desc:'Tough, and considerably faster than it looks. Periodically slams the nearest tower for a burst of bonus damage.' },
-  juggernaut: { name:'Juggernaut', hp:480, speed:0.55, livesLost:20, cost:110, endBonus:40, towerDps:38, color:'#8a95a3', dark:'#3a3f47',
+  juggernaut: { name:'Juggernaut', hp:480, speed:0.55, livesLost:20, cost:130, endBonus:40, towerDps:38, color:'#8a95a3', dark:'#3a3f47',
     slamDamage:38, slamInterval:3.2, slamRadius:1.8,
     desc:'A rung above Tank — serious health and a heavier slam, but slow to arrive.' },
   shield:   { name:'Shield Bot', hp:68, shieldHp:55, speed:1.2, livesLost:6, cost:26, endBonus:15, towerDps:17, color:'#5599dd', dark:'#274a70',
@@ -90,7 +90,7 @@ const ENEMY_TYPES = {
     slamDamage:40, slamInterval:4.5, slamRadius:2.2,
     desc:'Boss-tier HP, periodic tower slams, and occasional Grunt reinforcements.' },
 };
-const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','ravager'];
+const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','juggernaut'];
 // Monster type upgrades: a one-time purchase that permanently boosts every future spawn of that
 // type for the rest of the match (mirrors how tower upgrades work, but applies to the whole type
 // instead of one placed tower). Kept modest so a maxed-out monster type doesn't outweigh a maxed tower.
