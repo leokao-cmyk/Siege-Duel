@@ -264,6 +264,11 @@ let reconnectAttempts = 0;
 let reconnectDeadline = 0;
 const MAX_RECONNECT_MS = 25000; // give up and show Connection Lost after this long of trying
 let lastHeartbeatSentAt = 0;
+// Raw counters shown directly in the HUD (no DevTools needed) — lets a real-device failure be
+// reported as "tx:47 / rx:0" instead of a screenshot, which pinpoints whether the host ever sent,
+// the relay ever forwarded, or the remote ever received.
+let snapshotsSent = 0;
+let snapshotsReceived = 0;
 
 function toFrac(x, y){ return [ x/(cellSize*GRID_COLS), y/(cellSize*GRID_ROWS) ]; }
 function fromFrac(fx, fy){ return [ fx*cellSize*GRID_COLS, fy*cellSize*GRID_ROWS ]; }
@@ -310,6 +315,7 @@ function connectRelay(room, role, statusEl){
         } else if(msg.type==='snapshot'){
           lastSnapshotReceivedAt = performance.now();
           lastPeerHeardAt = performance.now();
+          snapshotsReceived++;
           applySnapshot(msg.data);
         } else if(msg.type==='action'){
           lastPeerHeardAt = performance.now();
@@ -420,6 +426,7 @@ function returnToLobby(){
 }
 
 function beginOnlineMatch(){
+  snapshotsSent = 0; snapshotsReceived = 0;
   el('startScreen').hidden = true;
   el('globalBar').hidden = false;
   el('defenseHalf').hidden = (myRole!=='defense');
@@ -1611,7 +1618,8 @@ function loop(now){
         stat.textContent = '🔄 reconnecting'; stat.classList.add('stale');
       } else {
         const secs = Math.max(0, (now - (netMode==='remote' ? lastSnapshotReceivedAt : lastSnapshotTime))/1000);
-        stat.textContent = secs<2 ? (netMode==='remote' ? '📡 synced' : '📡 broadcasting') : `📡 stalled ${secs.toFixed(0)}s`;
+        const count = netMode==='remote' ? `rx:${snapshotsReceived}` : `tx:${snapshotsSent}`;
+        stat.textContent = (secs<2 ? (netMode==='remote' ? '📡 synced' : '📡 broadcasting') : `📡 stalled ${secs.toFixed(0)}s`) + ` (${count})`;
         stat.classList.toggle('stale', secs>=2);
       }
     }
@@ -1663,6 +1671,7 @@ function loop(now){
 
   if(netMode==='host' && now-lastSnapshotTime > 1000/SNAPSHOT_HZ){
     lastSnapshotTime = now;
+    snapshotsSent++;
     sendNet({type:'snapshot', data:buildSnapshot()});
   }
 
