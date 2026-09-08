@@ -71,10 +71,13 @@ async def handler(ws):
 async def main():
     # Render (and most cloud hosts) assign a port via $PORT; fall back to 8940 for local runs.
     port = int(os.environ.get('PORT', 8940))
-    # Shorter ping/pong keepalive than the library default (20s/20s) so a connection killed
-    # abruptly by a locked or backgrounded phone gets noticed and cleaned up within seconds,
-    # instead of leaving its room slot looking occupied for up to ~40s.
-    async with websockets.serve(handler, '0.0.0.0', port, ping_interval=8, ping_timeout=8):
+    # A stale room slot is now cleaned up by the unconditional-eviction logic above, not by
+    # ping timeout, so there's no reason to keep this aggressive. A short ping_timeout was
+    # actively harmful on real devices: a phone/tablet briefly throttling JS in the background
+    # (or the OS deprioritizing a backgrounded tab for a couple seconds) could miss a single
+    # pong and get its otherwise-healthy connection killed by the server. Longer keepalive
+    # tolerates that without giving up anything, since eviction already handles reconnects.
+    async with websockets.serve(handler, '0.0.0.0', port, ping_interval=20, ping_timeout=20):
         print(f'Siege Duel relay running on ws://0.0.0.0:{port}')
         await asyncio.Future()
 

@@ -275,8 +275,8 @@ function connectRelay(room, role, statusEl){
     try{ ws = new WebSocket(wsUrl()); } catch(e){ reject(e); return; }
     ws.onopen = ()=>{ ws.send(JSON.stringify({type:'join', room, role})); };
     ws.onerror = ()=>{ statusEl.textContent = 'Could not reach the relay server. Is it running?'; };
-    ws.onclose = ()=>{
-      if(inOnlineMatch && netMode!=='local'){ statusEl.textContent = ''; showPeerLeft('The connection dropped.'); }
+    ws.onclose = (ev)=>{
+      if(inOnlineMatch && netMode!=='local'){ statusEl.textContent = ''; showPeerLeft(`The connection dropped (code ${ev.code}).`); }
     };
     ws.onmessage = (ev)=>{
       let msg; try{ msg = JSON.parse(ev.data); }catch(e){ console.error('Bad message from relay:', e); return; }
