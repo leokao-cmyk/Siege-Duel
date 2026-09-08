@@ -10,10 +10,10 @@ const MAP_WAYPOINTS = {
 };
 let WAYPOINTS = MAP_WAYPOINTS.warzone;
 const MATCH_SECONDS = 480;
-const DEFENSE_START_COINS = 155;
-const OFFENSE_START_COINS = 55;
-const OFFENSE_TRICKLE_PER_SEC = 2.3;
-const DEFENSE_TRICKLE_PER_SEC = 4.5;
+const DEFENSE_START_COINS = 200;
+const OFFENSE_START_COINS = 70;
+const OFFENSE_TRICKLE_PER_SEC = 3.0;
+const DEFENSE_TRICKLE_PER_SEC = 5.9;
 const MAX_LIVES = 100;
 
 const TOWER_TYPES = {
@@ -82,13 +82,15 @@ const ENEMY_TYPES = {
     desc:'Splits into two Splitlings when destroyed, doubling the trouble.' },
   splitling:{ name:'Splitling', hp:22, speed:2.2, livesLost:3, cost:0, endBonus:15, towerDps:8, color:'#e2aaff', dark:'#5a2680',
     desc:'A fragile fragment left behind by a destroyed Splitter.' },
+  broodcarrier: { name:'Brood Carrier', hp:95, speed:1.15, livesLost:10, cost:42, endBonus:20, towerDps:12, color:'#8a7a3a', dark:'#3a3018', splitInto:'grunt', splitCount:4,
+    desc:'A tough carrier that bursts into 4 Grunts when destroyed — kill it fast before it multiplies.' },
   ravager:  { name:'Ravager', hp:410, speed:1.15, livesLost:22, cost:145, endBonus:45, towerDps:55, color:'#7a3fb0', dark:'#2a1040',
     desc:'Faster and hits harder than Juggernaut, with no slam — a mobile heavy threat that closes in fast.' },
   warlord:  { name:'The Warlord', hp:1500, speed:0.6, livesLost:30, cost:200, endBonus:60, towerDps:38, isBoss:true, reinforceInterval:6.5, color:'#a3242e', dark:'#3a0d0d',
     slamDamage:40, slamInterval:4.5, slamRadius:2.2,
     desc:'Boss-tier HP, periodic tower slams, and occasional Grunt reinforcements.' },
 };
-const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','ravager'];
+const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','ravager'];
 // Monster type upgrades: a one-time purchase that permanently boosts every future spawn of that
 // type for the rest of the match (mirrors how tower upgrades work, but applies to the whole type
 // instead of one placed tower). Kept modest so a maxed-out monster type doesn't outweigh a maxed tower.
@@ -209,6 +211,7 @@ const MONSTER_SPAWN_SFX = {
   healer: ()=>playBuffer('monster_soft', 0.4, 1.0),
   bomber: ()=>playBuffer('monster_hiss', 0.4, 1.0),
   splitter: ()=>playBuffer('monster_growl_small', 0.35, 1.2),
+  broodcarrier: ()=>playBuffer('monster_growl_heavy', 0.4, 1.1),
   ravager: ()=>playBuffer('monster_growl_heavy', 0.45, 1.25),
   warlord: ()=>playBuffer('monster_boss_roar', 0.55, 1.0),
 };
@@ -231,6 +234,8 @@ let commanderSelected = false;
 let overclockTimer = 0;
 let nukeUsed = false;
 let defenseNukeUsed = false;
+let nukeFallTimer = 0; // counts down while the bomb-drop animation plays; detonates at 0
+const NUKE_FALL_DURATION = 0.85;
 let monsterLevels = {};
 Object.keys(ENEMY_TYPES).forEach(k=> monsterLevels[k]=1);
 let pathCellSet = new Set();
@@ -418,7 +423,7 @@ function buildSnapshot(){
     projectiles: projectiles.map(p=>{ const [fx,fy]=toFrac(p.x,p.y); return { fx, fy, color:p.color, splash:p.splash>0 }; }),
     effects: effects.map(ef=>{
       if(ef.type==='chainline'){ const [fx1,fy1]=toFrac(ef.x1,ef.y1); const [fx2,fy2]=toFrac(ef.x2,ef.y2); return { type:ef.type, fx1, fy1, fx2, fy2, life:ef.life, maxLife:ef.maxLife, color:ef.color }; }
-      if(ef.type==='flash'){ return { type:'flash', life:ef.life, maxLife:ef.maxLife }; }
+      if(ef.type==='flash' || ef.type==='bombfall'){ return { type:ef.type, life:ef.life, maxLife:ef.maxLife }; }
       const [fx,fy]=toFrac(ef.x,ef.y); return { type:ef.type, fx, fy, life:ef.life, maxLife:ef.maxLife, color:ef.color, rFrac:(ef.r||0)/cellSize };
     }),
   };
@@ -457,7 +462,7 @@ function applySnapshot(data){
   });
   effects = data.effects.map(ef=>{
     if(ef.type==='chainline'){ const [x1,y1]=fromFrac(ef.fx1,ef.fy1); const [x2,y2]=fromFrac(ef.fx2,ef.fy2); return { type:ef.type, x1,y1,x2,y2, life:ef.life, maxLife:ef.maxLife, color:ef.color }; }
-    if(ef.type==='flash'){ return { type:'flash', life:ef.life, maxLife:ef.maxLife }; }
+    if(ef.type==='flash' || ef.type==='bombfall'){ return { type:ef.type, life:ef.life, maxLife:ef.maxLife }; }
     const [x,y]=fromFrac(ef.fx,ef.fy); return { type:ef.type, x, y, life:ef.life, maxLife:ef.maxLife, color:ef.color, r:ef.rFrac*cellSize };
   });
 
@@ -1109,7 +1114,7 @@ function buildShops(){
 }
 // Shared by both sides' Nuclear Bomb — the blast doesn't care who dropped it: every monster and
 // the Commander die instantly, and every tower takes 50% of its own max HP in damage.
-function triggerNuke(){
+function detonateNuke(){
   towers.forEach(t=>{ t.hp -= t.maxHp*0.5; });
   enemies.forEach(e=>{ e.dead = true; e.hp = 0; });
   if(commander && !commander.dead){
@@ -1117,7 +1122,15 @@ function triggerNuke(){
     sfxCommanderDown();
   }
   effects.push({type:'flash', life:0.6, maxLife:0.6});
+  effects.push({type:'hit', x:cellSize*GRID_COLS/2, y:cellSize*GRID_ROWS/2, life:0.5, maxLife:0.5, color:'#ffd23f', r:cellSize*GRID_COLS*0.55});
   sfxDestroyed();
+}
+// Starts the bomb-drop: a short falling animation plays first, and the actual blast (detonateNuke)
+// fires when it lands — the visual and the real effect stay in sync for local and networked players.
+function triggerNuke(){
+  nukeFallTimer = NUKE_FALL_DURATION;
+  effects.push({type:'bombfall', life:NUKE_FALL_DURATION, maxLife:NUKE_FALL_DURATION});
+  beep(1300, NUKE_FALL_DURATION-0.05, 'sine', 0.16, 160);
 }
 function useAbilityLocal(key){
   if(phase!=='playing') return;
@@ -1369,7 +1382,7 @@ function startMatch(){
   if(!muted) actx.resume && actx.resume();
   defenseCoins=DEFENSE_START_COINS; offenseCoins=OFFENSE_START_COINS; lives=MAX_LIVES; timeLeft=MATCH_SECONDS;
   towers=[]; enemies=[]; projectiles=[]; effects=[];
-  selectedTowerType=null; selectedTowerId=null; overclockTimer=0; nukeUsed=false; defenseNukeUsed=false;
+  selectedTowerType=null; selectedTowerId=null; overclockTimer=0; nukeUsed=false; defenseNukeUsed=false; nukeFallTimer=0;
   commander = new Commander(); commanderSelected=false;
   Object.keys(ENEMY_TYPES).forEach(k=> monsterLevels[k]=1);
   el('infoPanel').style.display='none'; el('commanderPanel').style.display='none';
@@ -1469,6 +1482,26 @@ function renderPass(targetCtx, rawDt, offX, offY){
     ctx.save(); ctx.globalAlpha = Math.max(0,ef.life/ef.maxLife);
     if(ef.type==='chainline'){ ctx.strokeStyle=ef.color; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(ef.x1,ef.y1); ctx.lineTo(ef.x2,ef.y2); ctx.stroke(); }
     else if(ef.type==='flash'){ ctx.globalAlpha = Math.max(0,ef.life/ef.maxLife)*0.9; ctx.fillStyle='#fff'; ctx.fillRect(0,0,cellSize*GRID_COLS,cellSize*GRID_ROWS); }
+    else if(ef.type==='bombfall'){
+      ctx.globalAlpha = 1;
+      const gridW = cellSize*GRID_COLS, gridH = cellSize*GRID_ROWS;
+      const cx = gridW/2, cy = gridH/2;
+      const progress = 1 - Math.max(0, ef.life/ef.maxLife);
+      const eased = progress*progress; // accelerating fall
+      const bombY = -cellSize*2.5 + (cy+cellSize*2.5)*eased;
+      const bombSize = cellSize*(0.55+0.5*eased);
+      ctx.strokeStyle = '#ff3355'; ctx.lineWidth = 2.5; ctx.setLineDash([6,5]);
+      ctx.globalAlpha = 0.5+0.4*Math.sin(progress*20);
+      ctx.beginPath(); ctx.arc(cx, cy, cellSize*2.2*(1-eased*0.5), 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.35*eased;
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(cx, cy, bombSize*0.55, bombSize*0.22, 0, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.font = `${Math.round(bombSize)}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('💣', cx, bombY);
+    }
     else if(ef.type==='heal'){ ctx.strokeStyle=ef.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(ef.x,ef.y, ef.r*(1-(ef.life/ef.maxLife)), 0, Math.PI*2); ctx.stroke(); }
     else { ctx.strokeStyle=ef.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(ef.x,ef.y, ef.r*(1-(ef.life/ef.maxLife)*0.5), 0, Math.PI*2); ctx.stroke(); }
     ctx.restore();
@@ -1506,6 +1539,7 @@ function loop(now){
     offenseCoins += OFFENSE_TRICKLE_PER_SEC*offenseCatchup*dt;
     defenseCoins += DEFENSE_TRICKLE_PER_SEC*defenseCatchup*dt;
     if(overclockTimer>0) overclockTimer -= dt;
+    if(nukeFallTimer>0){ nukeFallTimer -= dt; if(nukeFallTimer<=0){ nukeFallTimer=0; detonateNuke(); } }
 
     towers.forEach(t=>t.update(dt));
     enemies.forEach(e=>e.update(dt));
