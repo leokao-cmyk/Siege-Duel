@@ -68,8 +68,8 @@ const ENEMY_TYPES = {
   tank:     { name:'Tank', hp:185, speed:1.05, livesLost:12, cost:30, endBonus:30, towerDps:33, color:'#a9713f', dark:'#5a3c1f',
     slamDamage:28, slamInterval:3, slamRadius:1.5,
     desc:'Tough, and considerably faster than it looks. Periodically slams the nearest tower for a burst of bonus damage.' },
-  juggernaut: { name:'Juggernaut', hp:480, speed:0.55, livesLost:20, cost:130, endBonus:40, towerDps:38, color:'#8a95a3', dark:'#3a3f47',
-    slamDamage:38, slamInterval:3.2, slamRadius:1.8,
+  juggernaut: { name:'Juggernaut', hp:340, speed:0.5, livesLost:20, cost:130, endBonus:40, towerDps:28, color:'#8a95a3', dark:'#3a3f47',
+    slamDamage:26, slamInterval:4.5, slamRadius:1.8,
     desc:'A rung above Tank — serious health and a heavier slam, but slow to arrive.' },
   shield:   { name:'Shield Bot', hp:68, shieldHp:55, speed:1.2, livesLost:6, cost:30, endBonus:15, towerDps:17, color:'#5599dd', dark:'#274a70',
     desc:'Has a shield that must be fully depleted before its real health takes damage. Snipers ignore shields entirely.' },
@@ -144,17 +144,22 @@ function playMusic(){
   a.currentTime = 0; a.muted = muted; a.play().catch(()=>{});
 }
 function stopMusic(){ MUSIC_TRACKS.forEach(a=>a.pause()); }
-// Toggling mute hard-mutes every audio element directly AND suspends the shared AudioContext
-// (which every gun/monster/commander sound plays through) so nothing can slip through.
+// Toggling mute hard-mutes every <audio> element directly AND zeroes a master gain node that
+// every gun/monster/commander sound routes through. Zeroing gain (rather than relying solely on
+// AudioContext.suspend/resume) is bulletproof across browsers — suspend/resume timing has known
+// quirks on some mobile Safari versions, but a GainNode's value takes effect immediately no
+// matter what state the context is in.
 function setMuted(m){
   muted = m;
   MUSIC_TRACKS.forEach(a=> a.muted = m);
   sfxExplosionAudio.muted = m; sfxVictoryAudio.muted = m; sfxDefeatAudio.muted = m;
+  masterGain.gain.value = m ? 0 : 1;
   if(m){ if(actx.state==='running') actx.suspend(); }
   else if(actx.state==='suspended') actx.resume();
 }
 
 const actx = new (window.AudioContext || window.webkitAudioContext)();
+const masterGain = actx.createGain(); masterGain.gain.value = 1; masterGain.connect(actx.destination);
 function beep(freq, dur, type, vol, sweepTo){
   if(muted) return;
   const osc = actx.createOscillator(); const gain = actx.createGain();
@@ -162,7 +167,7 @@ function beep(freq, dur, type, vol, sweepTo){
   if(sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, actx.currentTime+dur);
   gain.gain.setValueAtTime(vol||0.12, actx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
-  osc.connect(gain); gain.connect(actx.destination);
+  osc.connect(gain); gain.connect(masterGain);
   osc.start(); osc.stop(actx.currentTime+dur);
 }
 const sfxBuffers = {};
@@ -175,7 +180,7 @@ function playBuffer(name, vol, rate){
   const src = actx.createBufferSource(); src.buffer = buf;
   src.playbackRate.value = rate || 1;
   const gain = actx.createGain(); gain.gain.value = vol!=null ? vol : 0.5;
-  src.connect(gain); gain.connect(actx.destination);
+  src.connect(gain); gain.connect(masterGain);
   src.start();
 }
 ['gun_rapid','gun_cannon','gun_laser','gun_rocket','gun_electric','gun_fire','gun_toxic','gun_ice','monster_growl_small','monster_growl_heavy','monster_boss_roar','monster_soft','monster_hiss','commander_attack','commander_hurt','commander_respawn'].forEach(n=>loadSfxBuffer(n, `assets/sfx_${n}.mp3`));
