@@ -31,7 +31,7 @@ const TOWER_TYPES = {
     abilities:[ {}, {extraChain:2, extraChainRadius:0.4}, {extraChain:2, extraChainRadius:0.4, overloadEvery:4, overloadMult:2.5} ] },
   flamethrower: { key:'flamethrower', name:'Flamethrower', cost:100, hp:216, range:1.7, fireRate:0, damage:11, splash:0, slow:0, isAura:true, color:'#ff8844', dark:'#8a3a18', desc:'Continuously damages everything in its short range. Upgrades add a lingering burn, then Ignite Spread on kill.',
     abilities:[ {}, {auraBurnOnExit:true, burnDuration:2}, {auraBurnOnExit:true, burnDuration:2, igniteSpread:true, igniteRadius:1.3} ] },
-  artillery: { key:'artillery', name:'Artillery', cost:275, hp:390, range:5.0, fireRate:0.35, damage:84, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, devastating splash. Upgrades add a second shell, then a huge burning blast.',
+  artillery: { key:'artillery', name:'Artillery', cost:245, hp:390, range:5.0, fireRate:0.35, damage:84, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, devastating splash. Upgrades add a second shell, then a huge burning blast.',
     abilities:[ {}, {doubleBarrage:true}, {doubleBarrage:true, carpetMult:1.8, carpetBurn:true} ] },
   poison: { key:'poison', name:'Toxic Turret', cost:95, hp:205, range:2.4, fireRate:1.3, damage:4, splash:0, slow:0, color:'#8fdd3a', dark:'#3f6b1a', projSpeed:14, desc:'Applies a lingering poison DoT. Upgrades spread it to nearby enemies, then add stacking poison + a death cloud.',
     poisonDps:7, poisonDuration:3,
@@ -91,16 +91,6 @@ const ENEMY_TYPES = {
     desc:'Boss-tier HP, periodic tower slams, and occasional Grunt reinforcements.' },
 };
 const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','juggernaut','warlord'];
-// Monster type upgrades: a one-time purchase that permanently boosts every future spawn of that
-// type for the rest of the match (mirrors how tower upgrades work, but applies to the whole type
-// instead of one placed tower). Kept modest so a maxed-out monster type doesn't outweigh a maxed tower.
-const MONSTER_LEVEL_MULT = [ {hp:1, dmg:1, speed:1}, {hp:1.25, dmg:1.55, speed:1.05}, {hp:1.5, dmg:2.1, speed:1.1} ];
-const MONSTER_UPGRADE_COST_MULT = [null, 3.5, 6];
-function monsterUpgradeCost(key){
-  const lvl = monsterLevels[key]||1;
-  if(lvl>=3) return null;
-  return Math.round(ENEMY_TYPES[key].cost * MONSTER_UPGRADE_COST_MULT[lvl]);
-}
 
 const ABILITIES = {
   overclock: { key:'overclock', name:'Overclock', desc:'+60% speed, 4s', cost:30 },
@@ -241,8 +231,6 @@ let nukeUsed = false;
 let defenseNukeUsed = false;
 let nukeFallTimer = 0; // counts down while the bomb-drop animation plays; detonates at 0
 const NUKE_FALL_DURATION = 0.85;
-let monsterLevels = {};
-Object.keys(ENEMY_TYPES).forEach(k=> monsterLevels[k]=1);
 let pathCellSet = new Set();
 let pathPixelWaypoints = [], pathSegLengths = [], pathTotal = 0;
 let cellSize = 40;
@@ -474,8 +462,6 @@ function applyAction(name, payload){
     useAbilityLocal(payload.key);
   } else if(name==='useDefenseAbility'){
     useDefenseAbilityLocal(payload.key);
-  } else if(name==='upgradeMonster'){
-    upgradeMonsterLocal(payload.key);
   } else if(name==='moveCommander'){
     if(!commander) return;
     const [px,py] = fromFrac(payload.fx, payload.fy);
@@ -496,7 +482,7 @@ const r3 = n => Math.round(n*1000)/1000;
 const r1 = n => Math.round(n*10)/10;
 function buildSnapshot(){
   return {
-    phase, winner, winReason, timeLeft:r1(timeLeft), lives, defenseCoins:r1(defenseCoins), offenseCoins:r1(offenseCoins), overclockTimer:r1(overclockTimer), gameSpeedMult, monsterLevels, battlefieldTheme, nukeUsed, defenseNukeUsed,
+    phase, winner, winReason, timeLeft:r1(timeLeft), lives, defenseCoins:r1(defenseCoins), offenseCoins:r1(offenseCoins), overclockTimer:r1(overclockTimer), gameSpeedMult, battlefieldTheme, nukeUsed, defenseNukeUsed,
     towers: towers.map(t=>({ id:t.id, type:t.type, level:t.level, hp:Math.round(t.hp), maxHp:Math.round(t.maxHp), totalSpent:t.totalSpent, c:t.c, r:t.r, angle:r3(t.angle) })),
     enemies: enemies.map(e=>{
       const [fx,fy] = toFrac(e.x,e.y);
@@ -516,7 +502,7 @@ function applySnapshot(data){
   const wasPlaying = phase==='playing';
   phase = data.phase; winner = data.winner; winReason = data.winReason;
   timeLeft = data.timeLeft; lives = data.lives; defenseCoins = data.defenseCoins; offenseCoins = data.offenseCoins;
-  overclockTimer = data.overclockTimer; gameSpeedMult = data.gameSpeedMult; monsterLevels = data.monsterLevels || monsterLevels;
+  overclockTimer = data.overclockTimer; gameSpeedMult = data.gameSpeedMult;
   nukeUsed = !!data.nukeUsed; defenseNukeUsed = !!data.defenseNukeUsed;
   if(data.battlefieldTheme && data.battlefieldTheme!==battlefieldTheme){ applyBattlefieldTheme(data.battlefieldTheme); }
 
@@ -914,14 +900,12 @@ function damageEnemy(e, dmg, pierceShield){
 
 // ===================== ENEMY =====================
 class Enemy {
-  constructor(typeKey, scale, level){
+  constructor(typeKey, scale){
     this.id = nextId++; this.typeKey=typeKey; this.def=ENEMY_TYPES[typeKey]; this.scale=scale||1;
-    this.level = level || monsterLevels[typeKey] || 1;
-    const lm = MONSTER_LEVEL_MULT[this.level-1];
-    this.dmgMult = lm.dmg;
-    this.maxHp = this.def.hp*this.scale*lm.hp; this.hp=this.maxHp;
-    this.shieldHp = (this.def.shieldHp||0)*this.scale*lm.hp; this.maxShield=this.shieldHp;
-    this.baseSpeed = this.def.speed*lm.speed;
+    this.level = 1; this.dmgMult = 1;
+    this.maxHp = this.def.hp*this.scale; this.hp=this.maxHp;
+    this.shieldHp = (this.def.shieldHp||0)*this.scale; this.maxShield=this.shieldHp;
+    this.baseSpeed = this.def.speed;
     this.dist=0; this.dead=false; this.reachedEnd=false;
     this.slowTimer=0; this.slowFactor=0; this.stunTimer=0;
     this.dotDps=0; this.dotTimer=0; this.dotColor=null;
@@ -1165,24 +1149,15 @@ function buildShops(){
     const m = ENEMY_TYPES[key];
     const card = document.createElement('div');
     card.className = 'shop-card'; card.dataset.key = key; card.tabIndex = 0;
-    card.innerHTML = `<img class="icon" src="assets/${key}.png"><div class="name">${m.name}</div><div class="cost">💰 ${m.cost}</div><button class="lvlBadge" data-key="${key}">Lv1 ▲</button>`;
-    card.addEventListener('click', (ev)=>{
-      if(ev.target.closest('.lvlBadge')) return;
+    card.innerHTML = `<img class="icon" src="assets/${key}.png"><div class="name">${m.name}</div><div class="cost">💰 ${m.cost}</div>`;
+    card.addEventListener('click', ()=>{
       if(phase!=='playing') return;
       if(netMode==='remote'){ sendNet({type:'action', name:'spawnMonster', payload:{key}}); return; }
       if(offenseCoins < m.cost) return;
       offenseCoins -= m.cost; enemies.push(new Enemy(key,1));
       if(MONSTER_SPAWN_SFX[key]) MONSTER_SPAWN_SFX[key]();
     });
-    const lvlBtn = card.querySelector('.lvlBadge');
-    lvlBtn.addEventListener('click', (ev)=>{
-      ev.stopPropagation();
-      if(phase!=='playing') return;
-      if(netMode==='remote'){ sendNet({type:'action', name:'upgradeMonster', payload:{key}}); return; }
-      upgradeMonsterLocal(key);
-    });
     attachTooltip(card, m.name, m.desc);
-    attachTooltip(lvlBtn, `${m.name} — Type Upgrade`, `Permanently boosts the HP, speed, and damage of every ${m.name} you spawn for the rest of the match. Gets pricier each tier — 3 tiers total.`);
     monsterShop.appendChild(card);
   });
   Object.values(ABILITIES).forEach(a=>{
@@ -1252,13 +1227,6 @@ function useDefenseAbility(key){
   if(netMode==='remote') sendNet({type:'action', name:'useDefenseAbility', payload:{key}});
   else useDefenseAbilityLocal(key);
 }
-function upgradeMonsterLocal(key){
-  if(phase!=='playing') return;
-  const cost = monsterUpgradeCost(key);
-  if(cost===null || offenseCoins<cost) return;
-  offenseCoins -= cost; monsterLevels[key] = (monsterLevels[key]||1)+1;
-  sfxUpgrade();
-}
 function refreshShopStates(){
   document.querySelectorAll('#towerShop .shop-card:not(.abilityItem)').forEach(b=>{
     b.classList.toggle('selected', b.dataset.key===selectedTowerType);
@@ -1275,13 +1243,6 @@ function refreshShopStates(){
   document.querySelectorAll('#monsterShop .shop-card:not(.abilityItem)').forEach(b=>{
     const key = b.dataset.key;
     b.classList.toggle('disabled', offenseCoins < ENEMY_TYPES[key].cost);
-    const badge = b.querySelector('.lvlBadge');
-    if(badge){
-      const lvl = monsterLevels[key]||1;
-      const cost = monsterUpgradeCost(key);
-      if(cost===null){ badge.textContent = 'MAX'; badge.classList.add('maxed'); badge.classList.remove('disabled'); }
-      else { badge.textContent = `Lv${lvl} ▲${cost}`; badge.classList.remove('maxed'); badge.classList.toggle('disabled', offenseCoins<cost); }
-    }
   });
   const ocBtn = document.querySelector('[data-key="ability_overclock"]');
   if(ocBtn) ocBtn.disabled = offenseCoins < ABILITIES.overclock.cost;
@@ -1481,7 +1442,6 @@ function startMatch(){
   towers=[]; enemies=[]; projectiles=[]; effects=[];
   selectedTowerType=null; selectedTowerId=null; overclockTimer=0; nukeUsed=false; defenseNukeUsed=false; nukeFallTimer=0;
   commander = new Commander(); commanderSelected=false;
-  Object.keys(ENEMY_TYPES).forEach(k=> monsterLevels[k]=1);
   el('infoPanel').style.display='none'; el('commanderPanel').style.display='none';
   el('gameOverOverlay').hidden = true; el('rematchBtn').textContent = 'REMATCH'; connectionLost=false;
   phase='playing';
@@ -1665,8 +1625,11 @@ function loop(now){
     const defenseMoneyBonus = Math.max(0, 0.5-defenseShare)*2*MONEY_CATCHUP_STRENGTH;
     const offenseCatchup = Math.min(3, 1 + offenseMoneyBonus);
     const defenseCatchup = Math.min(3, 1 + defenseMoneyBonus);
-    offenseCoins += OFFENSE_TRICKLE_PER_SEC*offenseCatchup*dt;
-    defenseCoins += DEFENSE_TRICKLE_PER_SEC*defenseCatchup*dt;
+    // Income ramps up as the match goes on — 1x at the start, 2x by the final second — so the
+    // pace keeps escalating instead of staying flat for a full 6-minute match.
+    const lateGameMult = 1 + (1 - Math.max(0,timeLeft)/MATCH_SECONDS);
+    offenseCoins += OFFENSE_TRICKLE_PER_SEC*offenseCatchup*lateGameMult*dt;
+    defenseCoins += DEFENSE_TRICKLE_PER_SEC*defenseCatchup*lateGameMult*dt;
     if(overclockTimer>0) overclockTimer -= dt;
     if(nukeFallTimer>0){ nukeFallTimer -= dt; if(nukeFallTimer<=0){ nukeFallTimer=0; detonateNuke(); } }
 
