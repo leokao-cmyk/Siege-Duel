@@ -94,7 +94,7 @@ const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broo
 
 const ABILITIES = {
   overclock: { key:'overclock', name:'Overclock', desc:'+60% speed, 4s', cost:30 },
-  medic: { key:'medic', name:'Field Medic', desc:'Heal your monsters', cost:50 },
+  medic: { key:'medic', name:'Field Medic', desc:'Heal your monsters', cost:40 },
   nuke: { key:'nuke', name:'Nuclear Bomb', desc:'Free, one-time use per match. Instantly kills every monster and your Commander on the field, and blasts every tower for 50% of its max HP (towers already below half health are destroyed outright).', cost:0 },
 };
 const DEFENSE_ABILITIES = {
@@ -1192,7 +1192,7 @@ function useAbilityLocal(key){
   } else if(key==='medic'){
     if(offenseCoins < ABILITIES.medic.cost) return;
     offenseCoins -= ABILITIES.medic.cost;
-    enemies.forEach(e=>{ if(!e.dead) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*0.12); });
+    enemies.forEach(e=>{ if(!e.dead) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*0.2); });
   } else if(key==='nuke'){
     if(nukeUsed) return;
     nukeUsed = true;
@@ -1209,7 +1209,7 @@ function useDefenseAbilityLocal(key){
   if(key==='medic'){
     if(defenseCoins < DEFENSE_ABILITIES.medic.cost) return;
     defenseCoins -= DEFENSE_ABILITIES.medic.cost;
-    towers.forEach(t=>{ t.hp = Math.min(t.maxHp, t.hp + t.maxHp*0.2); });
+    towers.forEach(t=>{ t.hp = Math.min(t.maxHp, t.hp + t.maxHp*0.12); });
   } else if(key==='nuke'){
     if(defenseNukeUsed) return;
     defenseNukeUsed = true;
