@@ -82,7 +82,7 @@ const ENEMY_TYPES = {
     desc:'Splits into two Splitlings when destroyed, doubling the trouble.' },
   splitling:{ name:'Splitling', hp:22, speed:2.2, livesLost:3, cost:0, endBonus:15, towerDps:8, color:'#e2aaff', dark:'#5a2680',
     desc:'A fragile fragment left behind by a destroyed Splitter.' },
-  broodcarrier: { name:'Brood Carrier', hp:95, speed:1.15, livesLost:10, cost:65, endBonus:20, towerDps:12, color:'#8a7a3a', dark:'#3a3018', splitInto:'grunt', splitCount:3,
+  broodcarrier: { name:'Brood Carrier', hp:95, speed:1.15, livesLost:10, cost:50, endBonus:20, towerDps:12, color:'#8a7a3a', dark:'#3a3018', splitInto:'grunt', splitCount:3,
     desc:'A tough carrier that bursts into 3 Grunts when destroyed — kill it fast before it multiplies.' },
   ravager:  { name:'Ravager', hp:410, speed:1.15, livesLost:22, cost:109, endBonus:45, towerDps:55, color:'#7a3fb0', dark:'#2a1040',
     desc:'Faster and hits harder than Juggernaut, with no slam — a mobile heavy threat that closes in fast.' },
@@ -94,7 +94,7 @@ const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broo
 
 const ABILITIES = {
   overclock: { key:'overclock', name:'Overclock', desc:'+60% speed, 4s', cost:30 },
-  medic: { key:'medic', name:'Field Medic', desc:'Heal your monsters', cost:40 },
+  medic: { key:'medic', name:'Field Medic', desc:'Heal your monsters', cost:50 },
   nuke: { key:'nuke', name:'Nuclear Bomb', desc:'Free, one-time use per match. Instantly kills every monster and your Commander on the field, and blasts every tower for 50% of its max HP (towers already below half health are destroyed outright).', cost:0 },
 };
 const DEFENSE_ABILITIES = {
@@ -1192,7 +1192,7 @@ function useAbilityLocal(key){
   } else if(key==='medic'){
     if(offenseCoins < ABILITIES.medic.cost) return;
     offenseCoins -= ABILITIES.medic.cost;
-    enemies.forEach(e=>{ if(!e.dead) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*0.2); });
+    enemies.forEach(e=>{ if(!e.dead) e.hp = Math.min(e.maxHp, e.hp + e.maxHp*0.12); });
   } else if(key==='nuke'){
     if(nukeUsed) return;
     nukeUsed = true;
