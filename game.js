@@ -407,7 +407,11 @@ function releaseWakeLock(){
   if(wakeLock){ try{ wakeLock.release(); }catch(e){} wakeLock = null; }
 }
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible' && phase==='playing') requestWakeLock();
+  // Re-acquire whenever visible during an active match OR while an online room is being set up
+  // (created/joined, still waiting on the other player) — a tab switch to go text someone the
+  // room code shouldn't be enough to let the screen lock and kill the connection before anyone
+  // even joins.
+  if(document.visibilityState==='visible' && (phase==='playing' || (netMode!=='local' && !inOnlineMatch))) requestWakeLock();
 });
 
 function returnToLobby(){
@@ -1392,6 +1396,9 @@ function primeAudioForGesture(){
 }
 el('createRoomBtn').addEventListener('click', async ()=>{
   primeAudioForGesture();
+  requestWakeLock(); // engage now, not just once the match starts — the creator can otherwise sit
+                      // idle on "waiting for the other player" long enough for the screen to lock
+                      // and silently kill the connection before anyone even joins
   const statusEl = el('onlineStatus');
   const code = randomRoomCode();
   el('roomCodeInput').value = code;
@@ -1404,6 +1411,7 @@ el('createRoomBtn').addEventListener('click', async ()=>{
 });
 el('joinRoomBtn').addEventListener('click', async ()=>{
   primeAudioForGesture();
+  requestWakeLock();
   const statusEl = el('onlineStatus');
   const code = el('roomCodeInput').value.trim().toUpperCase();
   if(!code){ statusEl.textContent = 'Enter the room code first.'; return; }
