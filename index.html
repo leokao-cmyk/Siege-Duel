@@ -78,8 +78,8 @@
   #infoPanel h4 { margin:0 0 5px; font-size:14px; }
   #infoPanel .row { display:flex; justify-content:space-between; margin:2px 0; color:#c0c8d8; }
   #infoPanel button { margin-top:7px; margin-right:5px; padding:6px 11px; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:11.5px; }
-  #upgradeBtn, #commanderUpgradeBtn { background:#3fae4a; color:#fff; }
-  #upgradeBtn:disabled, #commanderUpgradeBtn:disabled { background:#3a4150; color:#888; }
+  #commanderUpgradeBtn { background:#3fae4a; color:#fff; }
+  #commanderUpgradeBtn:disabled { background:#3a4150; color:#888; }
   #sellBtn { background:#c0392b; color:#fff; }
   #commanderPanel { position:absolute; bottom:8px; left:8px; background:rgba(20,24,32,0.96); border:2px solid #3a4356; border-radius:10px; padding:10px; min-width:190px; display:none; z-index:6; font-size:12.5px; }
   #commanderPanel h4 { margin:0 0 5px; font-size:14px; color:#5599ff; }
@@ -151,10 +151,8 @@
       <canvas class="gameCanvas" id="defenseCanvas"></canvas>
       <div id="infoPanel">
         <h4 id="infoName">Tower</h4>
-        <div class="row"><span>Level</span><span id="infoLevel">1</span></div>
         <div class="row"><span>HP</span><span id="infoHp">-</span></div>
         <div class="row"><span>Damage</span><span id="infoDamage">-</span></div>
-        <button id="upgradeBtn">UPGRADE (💰<span id="upgradeCost">0</span>)</button>
         <button id="sellBtn">SELL (💰<span id="sellValue">0</span>)</button>
       </div>
     </div>
@@ -185,6 +183,6 @@
   </div>
 
 </div>
-<script src="game.js?v=17"></script>
+<script src="game.js?v=18"></script>
 </body>
 </html>

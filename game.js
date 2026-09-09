@@ -17,23 +17,23 @@ const DEFENSE_TRICKLE_PER_SEC = 5.9;
 const MAX_LIVES = 100;
 
 const TOWER_TYPES = {
-  machinegun: { key:'machinegun', name:'Machine Gun', cost:50, hp:108, range:2.3, fireRate:5.5, damage:5, splash:0, slow:0, color:'#66ccff', dark:'#2d6f8f', projSpeed:16, desc:'Rapid fire, low damage per shot — great value against weak swarms. Upgrades add Double Shot, then Critical Hits.',
+  machinegun: { key:'machinegun', name:'Machine Gun', cost:50, hp:108, range:2.3, fireRate:5.5, damage:5, splash:0, slow:0, color:'#66ccff', dark:'#2d6f8f', projSpeed:16, desc:'Rapid fire, low damage per shot — great value against weak swarms.',
     abilities:[ {}, {doubleShot:true}, {doubleShot:true, critChance:0.25, critMult:3} ] },
-  cannon: { key:'cannon', name:'Cannon', cost:85, hp:185, range:2.6, fireRate:1.0, damage:29, splash:1.1, slow:0, color:'#ffaa33', dark:'#8a5a1a', projSpeed:9, desc:'Splash damage hits multiple clustered enemies. Upgrades add Knockback, then Cluster Shrapnel.',
+  cannon: { key:'cannon', name:'Cannon', cost:85, hp:185, range:2.6, fireRate:1.0, damage:29, splash:1.1, slow:0, color:'#ffaa33', dark:'#8a5a1a', projSpeed:9, desc:'Splash damage hits multiple clustered enemies.',
     abilities:[ {}, {knockback:0.35}, {knockback:0.35, clusterCount:3, clusterFrac:0.35} ] },
-  sniper: { key:'sniper', name:'Sniper', cost:130, hp:280, range:4.6, fireRate:0.65, damage:72, splash:0, slow:0, piercesShield:true, color:'#dd3355', dark:'#7a1f30', projSpeed:26, desc:'Huge single-target damage and ignores enemy shields entirely. Upgrades add instant reload on kill, then Pierce.',
+  sniper: { key:'sniper', name:'Sniper', cost:130, hp:280, range:4.6, fireRate:0.65, damage:72, splash:0, slow:0, piercesShield:true, color:'#dd3355', dark:'#7a1f30', projSpeed:26, desc:'Huge single-target damage and ignores enemy shields entirely.',
     abilities:[ {}, {headshotRefund:true}, {headshotRefund:true, pierceFrac:0.5} ] },
-  rocket: { key:'rocket', name:'Rocket', cost:160, hp:345, range:3.0, fireRate:0.55, damage:50, splash:1.7, slow:0, color:'#ff5522', dark:'#8a2f12', projSpeed:7.5, desc:'Heavy splash damage, best against groups. Upgrades add a burning DoT, then a bigger blast that stuns.',
+  rocket: { key:'rocket', name:'Rocket', cost:160, hp:345, range:3.0, fireRate:0.55, damage:50, splash:1.7, slow:0, color:'#ff5522', dark:'#8a2f12', projSpeed:7.5, desc:'Heavy splash damage, best against groups.',
     abilities:[ {}, {burnFrac:0.25, burnDuration:3}, {burnFrac:0.25, burnDuration:3, carpetMult:1.6, stunDuration:0.4} ] },
-  frost: { key:'frost', name:'Frost Ray', cost:75, hp:162, range:2.5, fireRate:1.6, damage:4, splash:0, slow:0.5, slowDur:1.6, color:'#7ff5ee', dark:'#2f7a75', projSpeed:18, desc:'Low damage, but slows anything it hits. Upgrades add a periodic AoE slow pulse, then a chance to fully freeze.',
+  frost: { key:'frost', name:'Frost Ray', cost:75, hp:162, range:2.5, fireRate:1.6, damage:4, splash:0, slow:0.5, slowDur:1.6, color:'#7ff5ee', dark:'#2f7a75', projSpeed:18, desc:'Low damage, but slows anything it hits.',
     abilities:[ {}, {nova:true, novaInterval:3, novaSlow:0.35, novaDuration:1.2}, {nova:true, novaInterval:3, novaSlow:0.35, novaDuration:1.2, freezeChance:0.22, freezeDuration:1.0} ] },
-  tesla: { key:'tesla', name:'Tesla Coil', cost:145, hp:315, range:2.8, fireRate:1.2, damage:19, splash:0, slow:0, chain:3, chainRadius:1.9, color:'#c9a8ff', dark:'#5b3a8a', projSpeed:30, desc:'Lightning arcs between nearby enemies, hitting several at once. Upgrades widen the chain, then add Overload bursts.',
+  tesla: { key:'tesla', name:'Tesla Coil', cost:145, hp:315, range:2.8, fireRate:1.2, damage:19, splash:0, slow:0, chain:3, chainRadius:1.9, color:'#c9a8ff', dark:'#5b3a8a', projSpeed:30, desc:'Lightning arcs between nearby enemies, hitting several at once.',
     abilities:[ {}, {extraChain:2, extraChainRadius:0.4}, {extraChain:2, extraChainRadius:0.4, overloadEvery:4, overloadMult:2.5} ] },
-  flamethrower: { key:'flamethrower', name:'Flamethrower', cost:100, hp:216, range:1.7, fireRate:0, damage:11, splash:0, slow:0, isAura:true, color:'#ff8844', dark:'#8a3a18', desc:'Continuously damages everything in its short range. Upgrades add a lingering burn, then Ignite Spread on kill.',
+  flamethrower: { key:'flamethrower', name:'Flamethrower', cost:100, hp:216, range:1.7, fireRate:0, damage:11, splash:0, slow:0, isAura:true, color:'#ff8844', dark:'#8a3a18', desc:'Continuously damages everything in its short range.',
     abilities:[ {}, {auraBurnOnExit:true, burnDuration:2}, {auraBurnOnExit:true, burnDuration:2, igniteSpread:true, igniteRadius:1.3} ] },
-  artillery: { key:'artillery', name:'Artillery', cost:245, hp:390, range:5.0, fireRate:0.35, damage:84, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, devastating splash. Upgrades add a second shell, then a huge burning blast.',
+  artillery: { key:'artillery', name:'Artillery', cost:245, hp:260, range:5.0, fireRate:0.35, damage:56, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, splash damage.',
     abilities:[ {}, {doubleBarrage:true}, {doubleBarrage:true, carpetMult:1.8, carpetBurn:true} ] },
-  poison: { key:'poison', name:'Toxic Turret', cost:95, hp:205, range:2.4, fireRate:1.3, damage:4, splash:0, slow:0, color:'#8fdd3a', dark:'#3f6b1a', projSpeed:14, desc:'Applies a lingering poison DoT. Upgrades spread it to nearby enemies, then add stacking poison + a death cloud.',
+  poison: { key:'poison', name:'Toxic Turret', cost:95, hp:205, range:2.4, fireRate:1.3, damage:4, splash:0, slow:0, color:'#8fdd3a', dark:'#3f6b1a', projSpeed:14, desc:'Applies a lingering poison DoT.',
     poisonDps:7, poisonDuration:3,
     abilities:[ {}, {poisonSpreadRadius:1.2}, {poisonSpreadRadius:1.2, poisonStack:true, killCloud:true} ] },
 };
@@ -188,7 +188,6 @@ const TOWER_FIRE_SFX = {
 function sfxHit(dmg){ (dmg>=15?beep(110,0.14,'sawtooth',0.14):beep(260,0.06,'square',0.09)); }
 function sfxEnemyDeath(){ beep(340,0.08,'square',0.1,120); }
 function sfxPlace(){ beep(500,0.06,'sine',0.12); setTimeout(()=>beep(760,0.08,'sine',0.12),50); }
-function sfxUpgrade(){ [520,660,880].forEach((f,i)=>setTimeout(()=>beep(f,0.09,'sine',0.12),i*60)); }
 function sfxSell(){ beep(500,0.1,'sine',0.1,260); }
 function sfxDestroyed(){ playSample(sfxExplosionAudio); }
 function sfxCoin(){ beep(1500,0.05,'sine',0.06); setTimeout(()=>beep(1900,0.05,'sine',0.05),40); }
@@ -446,10 +445,6 @@ function applyAction(name, payload){
     if(defenseCoins < cost) return;
     defenseCoins -= cost; towers.push(new Tower(towerType, c, r));
     sfxPlace();
-  } else if(name==='upgradeTower'){
-    const t = towers.find(x=>x.id===payload.id); if(!t) return;
-    const cost = t.upgradeCost(); if(cost===null||defenseCoins<cost) return;
-    defenseCoins -= cost; t.totalSpent += cost; t.level++; sfxUpgrade();
   } else if(name==='sellTower'){
     const t = towers.find(x=>x.id===payload.id); if(!t) return;
     sfxSell(); defenseCoins += t.sellValue(); towers = towers.filter(x=>x!==t);
@@ -706,7 +701,6 @@ class Tower {
   get range(){ return this.def.range * LEVEL_MULT[this.level-1].range; }
   get fireRate(){ return this.def.fireRate * LEVEL_MULT[this.level-1].rate; }
   get rangePx(){ return this.range*cellSize; }
-  upgradeCost(){ if(this.level>=3) return null; return Math.round(this.def.cost*LEVEL_MULT[this.level].cost*0.65); }
   sellValue(){ return Math.round(this.totalSpent*0.6); }
   findTarget(){
     let target=null;
@@ -1332,21 +1326,10 @@ function showInfoPanel(){
   if(!t){ el('infoPanel').style.display='none'; return; }
   el('infoPanel').style.display='block';
   el('infoName').textContent = t.def.name;
-  el('infoLevel').textContent = t.level+' / 3';
   el('infoHp').textContent = Math.round(t.hp)+' / '+t.maxHp;
   el('infoDamage').textContent = Math.round(t.damage);
-  const upCost = t.upgradeCost();
-  const upBtn = el('upgradeBtn');
-  if(upCost===null){ upBtn.disabled=true; upBtn.innerHTML='MAX'; }
-  else { upBtn.disabled = defenseCoins<upCost; upBtn.innerHTML = `UP (💰${upCost})`; }
   el('sellValue').textContent = t.sellValue();
 }
-el('upgradeBtn').addEventListener('click', ()=>{
-  const t = towers.find(x=>x.id===selectedTowerId); if(!t) return;
-  if(netMode==='remote'){ sendNet({type:'action', name:'upgradeTower', payload:{id:t.id}}); return; }
-  const cost = t.upgradeCost(); if(cost===null||defenseCoins<cost) return;
-  defenseCoins -= cost; t.totalSpent += cost; t.level++; sfxUpgrade(); showInfoPanel();
-});
 el('sellBtn').addEventListener('click', ()=>{
   const t = towers.find(x=>x.id===selectedTowerId); if(!t) return;
   if(netMode==='remote'){ sendNet({type:'action', name:'sellTower', payload:{id:t.id}}); selectedTowerId=null; el('infoPanel').style.display='none'; return; }
