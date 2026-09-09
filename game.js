@@ -31,7 +31,7 @@ const TOWER_TYPES = {
     abilities:[ {}, {extraChain:2, extraChainRadius:0.4}, {extraChain:2, extraChainRadius:0.4, overloadEvery:4, overloadMult:2.5} ] },
   flamethrower: { key:'flamethrower', name:'Flamethrower', cost:100, hp:216, range:1.7, fireRate:0, damage:11, splash:0, slow:0, isAura:true, color:'#ff8844', dark:'#8a3a18', desc:'Continuously damages everything in its short range. Upgrades add a lingering burn, then Ignite Spread on kill.',
     abilities:[ {}, {auraBurnOnExit:true, burnDuration:2}, {auraBurnOnExit:true, burnDuration:2, igniteSpread:true, igniteRadius:1.3} ] },
-  artillery: { key:'artillery', name:'Artillery', cost:180, hp:390, range:5.0, fireRate:0.35, damage:84, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, devastating splash. Upgrades add a second shell, then a huge burning blast.',
+  artillery: { key:'artillery', name:'Artillery', cost:275, hp:390, range:5.0, fireRate:0.35, damage:84, splash:1.0, slow:0, color:'#98a84a', dark:'#3a4a1a', projSpeed:8, desc:'Very slow, very long range, devastating splash. Upgrades add a second shell, then a huge burning blast.',
     abilities:[ {}, {doubleBarrage:true}, {doubleBarrage:true, carpetMult:1.8, carpetBurn:true} ] },
   poison: { key:'poison', name:'Toxic Turret', cost:95, hp:205, range:2.4, fireRate:1.3, damage:4, splash:0, slow:0, color:'#8fdd3a', dark:'#3f6b1a', projSpeed:14, desc:'Applies a lingering poison DoT. Upgrades spread it to nearby enemies, then add stacking poison + a death cloud.',
     poisonDps:7, poisonDuration:3,
@@ -86,11 +86,11 @@ const ENEMY_TYPES = {
     desc:'A tough carrier that bursts into 3 Grunts when destroyed — kill it fast before it multiplies.' },
   ravager:  { name:'Ravager', hp:410, speed:1.15, livesLost:22, cost:109, endBonus:45, towerDps:55, color:'#7a3fb0', dark:'#2a1040',
     desc:'Faster and hits harder than Juggernaut, with no slam — a mobile heavy threat that closes in fast.' },
-  warlord:  { name:'The Warlord', hp:1500, speed:0.6, livesLost:30, cost:200, endBonus:60, towerDps:38, isBoss:true, reinforceInterval:6.5, color:'#a3242e', dark:'#3a0d0d',
+  warlord:  { name:'The Warlord', hp:1500, speed:0.6, livesLost:30, cost:300, endBonus:60, towerDps:38, isBoss:true, reinforceInterval:6.5, color:'#a3242e', dark:'#3a0d0d',
     slamDamage:40, slamInterval:4.5, slamRadius:2.2,
     desc:'Boss-tier HP, periodic tower slams, and occasional Grunt reinforcements.' },
 };
-const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','juggernaut'];
+const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','juggernaut','warlord'];
 // Monster type upgrades: a one-time purchase that permanently boosts every future spawn of that
 // type for the rest of the match (mirrors how tower upgrades work, but applies to the whole type
 // instead of one placed tower). Kept modest so a maxed-out monster type doesn't outweigh a maxed tower.
