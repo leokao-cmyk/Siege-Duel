@@ -256,7 +256,7 @@ let myRole = null;     // 'defense' | 'offense' (only meaningful when netMode !=
 let ws = null;
 let netRoomCode = null;
 let lastSnapshotTime = 0;
-const SNAPSHOT_HZ = 15;
+const SNAPSHOT_HZ = 10;
 let inOnlineMatch = false;     // true from the moment both players connect until the room is left
 let lastSnapshotReceivedAt = 0; // remote-side watchdog: last time a snapshot actually arrived
 const SNAPSHOT_TIMEOUT_MS = 6000;
@@ -488,20 +488,26 @@ function applyAction(name, payload){
   }
 }
 
+// Snapshots go out over the network at SNAPSHOT_HZ, so every field here is bytes-per-second times
+// however many enemies/projectiles/effects are on screen. Full float precision (JS can print 17
+// significant digits) is wasted on a fractional screen position — 3 decimals is already sub-pixel
+// at any real resolution — so round everything before it hits JSON.stringify.
+const r3 = n => Math.round(n*1000)/1000;
+const r1 = n => Math.round(n*10)/10;
 function buildSnapshot(){
   return {
-    phase, winner, winReason, timeLeft, lives, defenseCoins, offenseCoins, overclockTimer, gameSpeedMult, monsterLevels, battlefieldTheme, nukeUsed, defenseNukeUsed,
-    towers: towers.map(t=>({ id:t.id, type:t.type, level:t.level, hp:t.hp, maxHp:t.maxHp, totalSpent:t.totalSpent, c:t.c, r:t.r, angle:t.angle })),
+    phase, winner, winReason, timeLeft:r1(timeLeft), lives, defenseCoins:r1(defenseCoins), offenseCoins:r1(offenseCoins), overclockTimer:r1(overclockTimer), gameSpeedMult, monsterLevels, battlefieldTheme, nukeUsed, defenseNukeUsed,
+    towers: towers.map(t=>({ id:t.id, type:t.type, level:t.level, hp:Math.round(t.hp), maxHp:Math.round(t.maxHp), totalSpent:t.totalSpent, c:t.c, r:t.r, angle:r3(t.angle) })),
     enemies: enemies.map(e=>{
       const [fx,fy] = toFrac(e.x,e.y);
-      return { id:e.id, typeKey:e.typeKey, level:e.level, hp:e.hp, maxHp:e.maxHp, shieldHp:e.shieldHp, maxShield:e.maxShield, fx, fy, facing:e.facing, slowTimer:e.slowTimer, stunTimer:e.stunTimer, dotTimer:e.dotTimer, dotColor:e.dotColor };
+      return { id:e.id, typeKey:e.typeKey, level:e.level, hp:Math.round(e.hp), maxHp:Math.round(e.maxHp), shieldHp:e.shieldHp!=null?Math.round(e.shieldHp):e.shieldHp, maxShield:e.maxShield, fx:r3(fx), fy:r3(fy), facing:e.facing, slowTimer:r1(e.slowTimer), stunTimer:r1(e.stunTimer), dotTimer:r1(e.dotTimer), dotColor:e.dotColor };
     }),
-    commander: commander ? (()=>{ const [fx,fy]=toFrac(commander.x,commander.y); return { hp:commander.hp, maxHp:commander.maxHp, level:commander.level, xp:commander.xp, dead:commander.dead, respawnTimer:commander.respawnTimer, fx, fy }; })() : null,
-    projectiles: projectiles.map(p=>{ const [fx,fy]=toFrac(p.x,p.y); return { fx, fy, color:p.color, splash:p.splash>0 }; }),
+    commander: commander ? (()=>{ const [fx,fy]=toFrac(commander.x,commander.y); return { hp:Math.round(commander.hp), maxHp:Math.round(commander.maxHp), level:commander.level, xp:Math.round(commander.xp), dead:commander.dead, respawnTimer:r1(commander.respawnTimer), fx:r3(fx), fy:r3(fy) }; })() : null,
+    projectiles: projectiles.map(p=>{ const [fx,fy]=toFrac(p.x,p.y); return { fx:r3(fx), fy:r3(fy), color:p.color, splash:p.splash>0 }; }),
     effects: effects.map(ef=>{
-      if(ef.type==='chainline'){ const [fx1,fy1]=toFrac(ef.x1,ef.y1); const [fx2,fy2]=toFrac(ef.x2,ef.y2); return { type:ef.type, fx1, fy1, fx2, fy2, life:ef.life, maxLife:ef.maxLife, color:ef.color }; }
-      if(ef.type==='flash' || ef.type==='bombfall'){ return { type:ef.type, life:ef.life, maxLife:ef.maxLife }; }
-      const [fx,fy]=toFrac(ef.x,ef.y); return { type:ef.type, fx, fy, life:ef.life, maxLife:ef.maxLife, color:ef.color, rFrac:(ef.r||0)/cellSize };
+      if(ef.type==='chainline'){ const [fx1,fy1]=toFrac(ef.x1,ef.y1); const [fx2,fy2]=toFrac(ef.x2,ef.y2); return { type:ef.type, fx1:r3(fx1), fy1:r3(fy1), fx2:r3(fx2), fy2:r3(fy2), life:r3(ef.life), maxLife:r3(ef.maxLife), color:ef.color }; }
+      if(ef.type==='flash' || ef.type==='bombfall'){ return { type:ef.type, life:r3(ef.life), maxLife:r3(ef.maxLife) }; }
+      const [fx,fy]=toFrac(ef.x,ef.y); return { type:ef.type, fx:r3(fx), fy:r3(fy), life:r3(ef.life), maxLife:r3(ef.maxLife), color:ef.color, rFrac:r3((ef.r||0)/cellSize) };
     }),
   };
 }
@@ -1620,7 +1626,8 @@ function loop(now){
     const stat = el('netStat');
     if(stat){
       if(reconnecting){
-        stat.textContent = '🔄 reconnecting'; stat.classList.add('stale');
+        const count = netMode==='remote' ? `rx:${snapshotsReceived}` : `tx:${snapshotsSent}`;
+        stat.textContent = `🔄 reconnecting (${count})`; stat.classList.add('stale');
       } else {
         const secs = Math.max(0, (now - (netMode==='remote' ? lastSnapshotReceivedAt : lastSnapshotTime))/1000);
         const count = netMode==='remote' ? `rx:${snapshotsReceived}` : `tx:${snapshotsSent}`;
