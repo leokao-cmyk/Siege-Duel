@@ -86,8 +86,8 @@ const ENEMY_TYPES = {
     desc:'A tough carrier that bursts into 3 Grunts when destroyed — kill it fast before it multiplies.' },
   ravager:  { name:'Ravager', hp:410, speed:1.15, livesLost:22, cost:109, endBonus:45, towerDps:55, color:'#7a3fb0', dark:'#2a1040',
     desc:'Faster and hits harder than Juggernaut, with no slam — a mobile heavy threat that closes in fast.' },
-  warlord:  { name:'The Warlord', hp:1500, speed:0.6, livesLost:30, cost:300, endBonus:60, towerDps:38, isBoss:true, reinforceInterval:6.5, color:'#a3242e', dark:'#3a0d0d',
-    slamDamage:40, slamInterval:4.5, slamRadius:2.2,
+  warlord:  { name:'The Warlord', hp:1150, speed:0.6, livesLost:30, cost:340, endBonus:60, towerDps:28, isBoss:true, reinforceInterval:6.5, color:'#a3242e', dark:'#3a0d0d',
+    slamDamage:28, slamInterval:4.5, slamRadius:2.2,
     desc:'Boss-tier HP, periodic tower slams, and occasional Grunt reinforcements.' },
 };
 const MONSTER_SHOP = ['grunt','runner','tank','shield','bomber','splitter','broodcarrier','juggernaut','warlord'];
@@ -236,6 +236,13 @@ let cellSize = 40;
 let smokeParticles = [];
 let nextId = 1;
 let gameSpeedMult = 1;
+// Online, a speed change needs the other player's OK before it takes effect — one player's
+// device gets a "waiting for opponent" state (pendingOutgoingSpeed), the other gets a
+// yes/no prompt (pendingIncomingSpeed). Only HOST ever actually writes gameSpeedMult (it's the
+// only side whose value drives the real simulation); WHEN it writes depends on who asked:
+// immediately upon accepting an incoming request, or upon hearing back after making one itself.
+let pendingOutgoingSpeed = null;
+let pendingIncomingSpeed = null;
 
 // ===================== NETWORKING =====================
 let netMode = 'local'; // 'local' | 'host' | 'remote'
@@ -406,6 +413,7 @@ document.addEventListener('visibilitychange', ()=>{
 function returnToLobby(){
   el('gameOverOverlay').hidden = true;
   cancelReconnect();
+  pendingOutgoingSpeed = null; hideSpeedConfirmPrompt();
   if(ws){ try{ ws.close(); }catch(e){} ws=null; }
   netMode='local'; myRole=null; netRoomCode=null; connectionLost=false; inOnlineMatch=false;
   releaseWakeLock();
@@ -419,11 +427,11 @@ function returnToLobby(){
 
 function beginOnlineMatch(){
   snapshotsSent = 0; snapshotsReceived = 0;
+  pendingOutgoingSpeed = null; hideSpeedConfirmPrompt();
   el('startScreen').hidden = true;
   el('globalBar').hidden = false;
   el('defenseHalf').hidden = (myRole!=='defense');
   el('offenseHalf').hidden = (myRole!=='offense');
-  document.getElementById('speedBtn').style.display = (netMode==='remote') ? 'none' : '';
   el('netStat').hidden = false;
   actx.resume && actx.resume();
   requestWakeLock();
@@ -466,6 +474,12 @@ function applyAction(name, payload){
     const cost = commanderUpgradeCost();
     if(offenseCoins<cost) return;
     offenseCoins -= cost; commander.gainXp(commander.xpToNext); sfxLevelUp();
+  } else if(name==='speedRequest'){
+    showSpeedConfirmPrompt(payload.speed);
+  } else if(name==='speedResponse'){
+    pendingOutgoingSpeed = null;
+    if(payload.accepted && netMode==='host'){ gameSpeedMult = payload.speed; }
+    updateSpeedBtnUI();
   }
 }
 
@@ -534,6 +548,7 @@ function applySnapshot(data){
   el('offCoins').textContent = Math.round(offenseCoins);
   const t = Math.max(0,timeLeft); const mm=Math.floor(t/60), ss=Math.floor(t%60);
   el('timerStat').textContent = `⏱ ${mm}:${ss.toString().padStart(2,'0')}`;
+  updateSpeedBtnUI();
   refreshShopStates();
   if(selectedTowerId!=null) showInfoPanel();
   if(commanderSelected) showCommanderPanel();
@@ -1405,10 +1420,41 @@ el('rematchBtn').addEventListener('click', ()=>{
   startMatch(); // local or host: restart immediately, keeping the same room if online
 });
 el('leaveRoomBtn').addEventListener('click', returnToLobby);
+function updateSpeedBtnUI(){
+  const btn = el('speedBtn');
+  if(pendingOutgoingSpeed!=null){ btn.disabled=true; btn.textContent='Waiting...'; btn.classList.remove('active'); return; }
+  btn.disabled=false;
+  btn.textContent = gameSpeedMult+'x SPEED';
+  btn.classList.toggle('active', gameSpeedMult===2);
+}
+function showSpeedConfirmPrompt(speed){
+  pendingIncomingSpeed = speed;
+  el('speedConfirmText').textContent = `The other player wants ${speed}x speed — allow it?`;
+  el('speedConfirmBox').hidden = false;
+}
+function hideSpeedConfirmPrompt(){
+  pendingIncomingSpeed = null;
+  el('speedConfirmBox').hidden = true;
+}
+function respondToSpeedRequest(accepted){
+  const speed = pendingIncomingSpeed;
+  hideSpeedConfirmPrompt();
+  if(accepted && netMode==='host'){ gameSpeedMult = speed; updateSpeedBtnUI(); }
+  sendNet({type:'action', name:'speedResponse', payload:{speed, accepted}});
+}
+el('speedAcceptBtn').addEventListener('click', ()=> respondToSpeedRequest(true));
+el('speedDeclineBtn').addEventListener('click', ()=> respondToSpeedRequest(false));
 el('speedBtn').addEventListener('click', ()=>{
-  gameSpeedMult = gameSpeedMult===1 ? 2 : 1;
-  el('speedBtn').textContent = gameSpeedMult+'x SPEED';
-  el('speedBtn').classList.toggle('active', gameSpeedMult===2);
+  if(netMode==='local'){
+    gameSpeedMult = gameSpeedMult===1 ? 2 : 1;
+    updateSpeedBtnUI();
+    return;
+  }
+  if(pendingOutgoingSpeed!=null || pendingIncomingSpeed!=null) return;
+  const desired = gameSpeedMult===1 ? 2 : 1;
+  pendingOutgoingSpeed = desired;
+  sendNet({type:'action', name:'speedRequest', payload:{speed: desired}});
+  updateSpeedBtnUI();
 });
 el('muteBtn').addEventListener('click', ()=>{
   setMuted(!muted);
@@ -1425,11 +1471,13 @@ function startMatch(){
   towers=[]; enemies=[]; projectiles=[]; effects=[];
   selectedTowerType=null; selectedTowerId=null; overclockTimer=0; nukeUsed=false; defenseNukeUsed=false; nukeFallTimer=0;
   commander = new Commander(); commanderSelected=false;
+  gameSpeedMult=1; pendingOutgoingSpeed=null; hideSpeedConfirmPrompt();
   el('infoPanel').style.display='none'; el('commanderPanel').style.display='none';
   el('gameOverOverlay').hidden = true; el('rematchBtn').textContent = 'REMATCH'; connectionLost=false;
   phase='playing';
   playMusic();
   refreshShopStates();
+  updateSpeedBtnUI();
 }
 
 function endMatch(win, reason){
