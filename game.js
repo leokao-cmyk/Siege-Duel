@@ -1419,7 +1419,20 @@ el('pickOffenseBtn').addEventListener('click', ()=>{ pickedRole='offense'; el('p
 
 function randomRoomCode(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
 
+// Mobile Safari/Chrome-iOS only allow starting audio during the SYNCHRONOUS execution of a real
+// tap handler. Online play used to only call actx.resume() (and never touched the <audio>
+// elements at all) inside beginOnlineMatch(), which fires later from a WebSocket 'peer_joined'
+// message — by then the tap's "user gesture" credential has expired on strict mobile browsers,
+// so audio stayed silently blocked for the rest of the match. Unlock everything right here,
+// synchronously inside the actual click.
+function primeAudioForGesture(){
+  actx.resume && actx.resume();
+  [...MUSIC_TRACKS, sfxExplosionAudio, sfxVictoryAudio, sfxDefeatAudio].forEach(a=>{
+    a.play().then(()=> a.pause()).catch(()=>{});
+  });
+}
 el('createRoomBtn').addEventListener('click', async ()=>{
+  primeAudioForGesture();
   const statusEl = el('onlineStatus');
   const code = randomRoomCode();
   el('roomCodeInput').value = code;
@@ -1431,6 +1444,7 @@ el('createRoomBtn').addEventListener('click', async ()=>{
   }catch(e){ netMode='local'; }
 });
 el('joinRoomBtn').addEventListener('click', async ()=>{
+  primeAudioForGesture();
   const statusEl = el('onlineStatus');
   const code = el('roomCodeInput').value.trim().toUpperCase();
   if(!code){ statusEl.textContent = 'Enter the room code first.'; return; }
