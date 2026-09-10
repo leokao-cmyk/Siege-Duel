@@ -104,6 +104,12 @@ const DEFENSE_ABILITIES = {
 };
 
 const COMMANDER_BASE = { hp:220, damage:29, fireRate:1.15, range:2.0, speed:2.0, respawnTime:12, xpPerLevel:170, maxLevel:4 };
+// A few seconds of damage immunity on spawn/respawn so the Commander isn't instantly deleted by
+// a wall of towers the moment it appears — especially once defense has a fully built-out board.
+const COMMANDER_SPAWN_SHIELD_SECONDS = 3;
+// The more towers defense has down, the more raw damage output is pointed at the field at once —
+// offense scales up to match instead of just getting steadily out-gunned as the board fills in.
+function towerPressureMult(){ return 1 + towers.length*0.05; }
 // Kept off every map's path and away from the corner — a cramped bottom-left corner spawn was
 // hard to reach/tap on small/tablet screens (verified clear of all 4 battlefield paths).
 const COMMANDER_HOME_CELL = [2, 5];
@@ -503,7 +509,7 @@ function buildSnapshot(){
       const [fx,fy] = toFrac(e.x,e.y);
       return { id:e.id, typeKey:e.typeKey, level:e.level, hp:Math.round(e.hp), maxHp:Math.round(e.maxHp), shieldHp:e.shieldHp!=null?Math.round(e.shieldHp):e.shieldHp, maxShield:e.maxShield, fx:r3(fx), fy:r3(fy), facing:e.facing, slowTimer:r1(e.slowTimer), stunTimer:r1(e.stunTimer), dotTimer:r1(e.dotTimer), dotColor:e.dotColor };
     }),
-    commander: commander ? (()=>{ const [fx,fy]=toFrac(commander.x,commander.y); return { hp:Math.round(commander.hp), maxHp:Math.round(commander.maxHp), level:commander.level, xp:Math.round(commander.xp), dead:commander.dead, respawnTimer:r1(commander.respawnTimer), fx:r3(fx), fy:r3(fy) }; })() : null,
+    commander: commander ? (()=>{ const [fx,fy]=toFrac(commander.x,commander.y); return { hp:Math.round(commander.hp), maxHp:Math.round(commander.maxHp), level:commander.level, xp:Math.round(commander.xp), dead:commander.dead, respawnTimer:r1(commander.respawnTimer), spawnShieldTimer:r1(commander.spawnShieldTimer), fx:r3(fx), fy:r3(fy) }; })() : null,
     projectiles: projectiles.map(p=>{ const [fx,fy]=toFrac(p.x,p.y); return { fx:r3(fx), fy:r3(fy), color:p.color, splash:p.splash>0 }; }),
     effects: effects.map(ef=>{
       if(ef.type==='chainline'){ const [fx1,fy1]=toFrac(ef.x1,ef.y1); const [fx2,fy2]=toFrac(ef.x2,ef.y2); return { type:ef.type, fx1:r3(fx1), fy1:r3(fy1), fx2:r3(fx2), fy2:r3(fy2), life:r3(ef.life), maxLife:r3(ef.maxLife), color:ef.color }; }
@@ -917,7 +923,7 @@ function damageEnemy(e, dmg, pierceShield){
 class Enemy {
   constructor(typeKey, scale){
     this.id = nextId++; this.typeKey=typeKey; this.def=ENEMY_TYPES[typeKey]; this.scale=scale||1;
-    this.level = 1; this.dmgMult = 1;
+    this.level = 1;
     this.maxHp = this.def.hp*this.scale; this.hp=this.maxHp;
     this.shieldHp = (this.def.shieldHp||0)*this.scale; this.maxShield=this.shieldHp;
     this.baseSpeed = this.def.speed;
@@ -930,6 +936,9 @@ class Enemy {
     this.facing = 1;
     const p = posAtDistance(0); this.x=p.x; this.y=p.y;
   }
+  // Recomputed live (not fixed at spawn) so a monster already on the field gets stronger too as
+  // defense keeps building — matches how oppressive a fuller board actually feels turn to turn.
+  get dmgMult(){ return towerPressureMult(); }
   update(dt){
     if(this.dotTimer>0){ this.dotTimer-=dt; this.hp -= this.dotDps*dt; if(this.hp<=0 && !this.dead){ killEnemy(this,null); return; } }
     let spd = this.baseSpeed*cellSize;
@@ -1021,10 +1030,11 @@ class Commander {
     this.cooldown = 0; this.dead = false; this.respawnTimer = 0;
     this.slowTimer = 0; this.slowFactor = 0; this.stunTimer = 0;
     this.shieldHp = 0; this.dist = Infinity; this.auraTimer = 0;
+    this.spawnShieldTimer = COMMANDER_SPAWN_SHIELD_SECONDS;
   }
   get hasAura(){ return this.level>=3; }
   get auraRadiusPx(){ return 2.5*cellSize; }
-  get damage(){ return COMMANDER_BASE.damage * (1 + 0.13*(this.level-1)); }
+  get damage(){ return COMMANDER_BASE.damage * (1 + 0.13*(this.level-1)) * towerPressureMult(); }
   get fireRate(){ return COMMANDER_BASE.fireRate * (1 + 0.09*(this.level-1)); }
   get range(){ return COMMANDER_BASE.range; }
   get xpToNext(){ return COMMANDER_BASE.xpPerLevel * this.level; }
@@ -1040,7 +1050,7 @@ class Commander {
     }
   }
   takeDamage(dmg){
-    if(this.dead) return false;
+    if(this.dead || this.spawnShieldTimer>0) return false;
     this.hp -= dmg;
     if(this.hp<=0){ this.dead=true; this.respawnTimer=COMMANDER_BASE.respawnTime; sfxCommanderDown(); return true; }
     return false;
@@ -1049,6 +1059,7 @@ class Commander {
     this.dead=false; this.hp=this.maxHp;
     const home = gridToPx(...COMMANDER_HOME_CELL);
     this.x=home[0]; this.y=home[1]; this.targetX=this.x; this.targetY=this.y;
+    this.spawnShieldTimer = COMMANDER_SPAWN_SHIELD_SECONDS;
     sfxCommanderRespawn();
   }
   update(dt){
@@ -1057,6 +1068,7 @@ class Commander {
       if(this.respawnTimer<=0) this.respawn();
       return;
     }
+    if(this.spawnShieldTimer>0) this.spawnShieldTimer -= dt;
     this.cooldown -= dt;
     let spd = COMMANDER_BASE.speed*cellSize;
     if(this.stunTimer>0){ this.stunTimer-=dt; spd=0; }
@@ -1112,6 +1124,13 @@ class Commander {
     ctx.fillRect(this.x-barW/2, barY, barW*Math.max(0,this.hp/this.maxHp), 6);
     ctx.fillStyle='#ffdd33'; ctx.font=`bold ${Math.max(10,Math.round(cellSize*0.32))}px sans-serif`; ctx.textAlign='center';
     ctx.fillText('Lv'+this.level, this.x, barY-4);
+    if(this.spawnShieldTimer>0){
+      ctx.save();
+      ctx.globalAlpha = 0.55 + 0.35*Math.sin(this.spawnShieldTimer*10);
+      ctx.strokeStyle = '#7fdfff'; ctx.lineWidth = 3; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.arc(this.x, this.y, s*0.62, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
