@@ -60,6 +60,7 @@ function tierSpriteFilter(level, maxLevel){
 }
 
 const TOWER_ATTACK_RANGE = 1.3;
+const MAX_TOWERS_PER_TYPE = 2;
 const ENEMY_TYPES = {
   grunt:    { name:'Grunt', hp:52, speed:1.55, livesLost:5, cost:10, endBonus:15, towerDps:13, color:'#8bcf5a', dark:'#3f6b28',
     desc:'Balanced all-rounder with no special tricks.' },
@@ -453,6 +454,7 @@ function applyAction(name, payload){
     if(pathCellSet.has(c+','+r)) return;
     if(c<0||r<0||c>=GRID_COLS||r>=GRID_ROWS) return;
     if(towers.find(t=>t.c===c && t.r===r)) return;
+    if(towers.filter(t=>t.type===towerType).length >= MAX_TOWERS_PER_TYPE) return;
     const cost = TOWER_TYPES[towerType].cost;
     if(defenseCoins < cost) return;
     defenseCoins -= cost; towers.push(new Tower(towerType, c, r));
@@ -1137,7 +1139,7 @@ function buildShops(){
   Object.values(TOWER_TYPES).forEach(t=>{
     const btn = document.createElement('button');
     btn.className = 'shop-card'; btn.dataset.key = t.key;
-    btn.innerHTML = `<img class="icon" src="assets/${t.key}.png"><div class="name">${t.name}</div><div class="cost">💰 ${t.cost}</div>`;
+    btn.innerHTML = `<img class="icon" src="assets/${t.key}.png"><div class="name">${t.name}</div><div class="cost">💰 ${t.cost}</div><div class="towerCount" data-key="${t.key}">0/${MAX_TOWERS_PER_TYPE}</div>`;
     btn.addEventListener('click', ()=>{
       if(phase!=='playing') return;
       selectedTowerType = selectedTowerType===t.key ? null : t.key;
@@ -1242,8 +1244,13 @@ function useDefenseAbility(key){
 }
 function refreshShopStates(){
   document.querySelectorAll('#towerShop .shop-card:not(.abilityItem)').forEach(b=>{
-    b.classList.toggle('selected', b.dataset.key===selectedTowerType);
-    b.disabled = defenseCoins < TOWER_TYPES[b.dataset.key].cost;
+    const key = b.dataset.key;
+    const count = towers.filter(t=>t.type===key).length;
+    const maxedOut = count >= MAX_TOWERS_PER_TYPE;
+    b.classList.toggle('selected', key===selectedTowerType);
+    b.disabled = maxedOut || defenseCoins < TOWER_TYPES[key].cost;
+    const countEl = b.querySelector('.towerCount');
+    if(countEl){ countEl.textContent = `${count}/${MAX_TOWERS_PER_TYPE}`; countEl.classList.toggle('maxed', maxedOut); }
   });
   const defMedicBtn = document.querySelector('[data-key="defAbility_medic"]');
   if(defMedicBtn) defMedicBtn.disabled = defenseCoins < DEFENSE_ABILITIES.medic.cost;
@@ -1284,6 +1291,7 @@ defCanvas.addEventListener('click', ev=>{
       sendNet({type:'action', name:'placeTower', payload:{towerType:selectedTowerType, c, r}});
       return;
     }
+    if(towers.filter(t=>t.type===selectedTowerType).length >= MAX_TOWERS_PER_TYPE) return;
     const cost = TOWER_TYPES[selectedTowerType].cost;
     if(defenseCoins < cost) return;
     defenseCoins -= cost; towers.push(new Tower(selectedTowerType, c, r));
